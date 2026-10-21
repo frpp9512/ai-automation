@@ -1,0 +1,48 @@
+@rendermode InteractiveServer
+@using AiAutomations.Client.Web.Services
+@implements IDisposable
+@inject ServerApiClient Api
+@inject RealtimeClient Realtime
+
+<div class="health-strip">
+    <span class="health-item"><span class="health-dot @DotClass(_health?.SlackConnected)"></span>Slack</span>
+    <span class="health-item"><span class="health-dot @DotClass(_health?.DatabaseOk)"></span>DB</span>
+    <span class="health-item"><span class="health-dot @DotClass(_health?.AiProviderConfigured)"></span>AI&nbsp;<span class="text-muted">(@(_health?.AiProvider ?? "?"))</span></span>
+    <span class="health-item"><span class="health-dot @DotClass(_live)"></span>Live</span>
+</div>
+
+@code {
+    private AiAutomations.Shared.HealthStatusDto? _health;
+    private bool _live;
+    private Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+        _timer = new Timer(_ => InvokeAsync(RefreshAsync), null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15));
+    }
+
+    private async Task RefreshAsync()
+    {
+        try
+        {
+            _health = await Api.GetHealthAsync();
+        }
+        catch
+        {
+            _health = null;
+        }
+
+        _live = Realtime.IsConnected;
+        StateHasChanged();
+    }
+
+    private static string DotClass(bool? ok) => ok switch
+    {
+        true => "health-dot-ok",
+        false => "health-dot-bad",
+        null => "health-dot-unknown"
+    };
+
+    public void Dispose() => _timer?.Dispose();
+}

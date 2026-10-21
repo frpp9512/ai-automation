@@ -1,0 +1,90 @@
+@page "/settings"
+@rendermode InteractiveServer
+@using AiAutomations.Client.Web.Services
+@using AiAutomations.Shared
+@inject ServerApiClient Api
+
+<PageTitle>Settings</PageTitle>
+
+<h1>Settings</h1>
+
+<h5>Repositories</h5>
+<p class="text-muted">
+    Known repositories the classifier can suggest for implementation/planning tasks.
+</p>
+
+@if (_repos is null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+        <tr>
+            <th>Name</th>
+            <th>Path</th>
+            <th>Keywords</th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody>
+        @foreach (var repo in _repos)
+        {
+            <tr>
+                <td>@repo.Name</td>
+                <td><code>@repo.Path</code></td>
+                <td class="text-muted small">@repo.Keywords</td>
+                <td><button class="btn btn-sm btn-outline-danger" @onclick="() => Delete(repo.Id)">Remove</button></td>
+            </tr>
+        }
+        </tbody>
+    </table>
+
+    <div class="row g-2 align-items-end" style="max-width: 900px;">
+        <div class="col-3">
+            <label class="form-label">Name</label>
+            <input class="form-control" @bind="_newName" />
+        </div>
+        <div class="col-3">
+            <label class="form-label">Path</label>
+            <input class="form-control" @bind="_newPath" />
+        </div>
+        <div class="col-4">
+            <label class="form-label">Keywords</label>
+            <input class="form-control" @bind="_newKeywords" placeholder="comma-separated, what it's about" />
+        </div>
+        <div class="col-2">
+            <button class="btn btn-primary w-100" @onclick="Add" disabled="@(string.IsNullOrWhiteSpace(_newName) || string.IsNullOrWhiteSpace(_newPath))">
+                Add
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    private List<RepositoryProfileDto>? _repos;
+    private string _newName = "";
+    private string _newPath = "";
+    private string _newKeywords = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _repos = await Api.GetRepositoriesAsync() ?? [];
+    }
+
+    private async Task Add()
+    {
+        await Api.CreateRepositoryAsync(_newName, _newPath, string.IsNullOrWhiteSpace(_newKeywords) ? null : _newKeywords);
+        _newName = "";
+        _newPath = "";
+        _newKeywords = "";
+        _repos = await Api.GetRepositoriesAsync() ?? [];
+    }
+
+    private async Task Delete(Guid id)
+    {
+        await Api.DeleteRepositoryAsync(id);
+        _repos = await Api.GetRepositoriesAsync() ?? [];
+    }
+}

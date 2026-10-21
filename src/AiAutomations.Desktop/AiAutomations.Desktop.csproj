@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>AiAutomations.Desktop</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
+    <Platforms>x86;x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />
+    <PackageReference Include="H.NotifyIcon.WinUI" Version="2.4.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AiAutomations.Desktop.Core\AiAutomations.Desktop.Core.csproj" />
+    <ProjectReference Include="..\AiAutomations.Shared\AiAutomations.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Explicitly copied (not just left to MSIX packaging's own asset discovery) so the tray
+         icon (app-icon.ico, loaded at runtime via System.Drawing.Icon) and the title bar/About
+         page images (loaded via XAML Image controls) are present in ANY build/publish output,
+         including a plain `dotnet publish -p:RuntimeIdentifier=win-x64` that never runs the real
+         MSIX packaging payload step (the loose layout that step produces doesn't matter for
+         command-line-only dev deploys - see AppxManifest.xml's own VisualElements references,
+         which only resolve correctly if these files are actually next to it on disk). -->
+    <Content Include="Assets\app-icon.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\*.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

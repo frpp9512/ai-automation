@@ -1,0 +1,204 @@
+@page "/tasks"
+@rendermode InteractiveServer
+@using AiAutomations.Client.Web.Services
+@using AiAutomations.Core.Models
+@using AiAutomations.Shared
+@inject ServerApiClient Api
+@inject RealtimeClient Realtime
+@implements IDisposable
+
+<PageTitle>Tasks</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="mb-0">Tasks</h1>
+    <button class="btn btn-primary" @onclick="() => _showAddForm = !_showAddForm">
+        @(_showAddForm ? "Cancel" : "+ Add task")
+    </button>
+</div>
+
+@if (_showAddForm)
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-2 mb-2">
+                <div class="col">
+                    <label class="form-label">Title</label>
+                    <input class="form-control" @bind="_newTitle" />
+                </div>
+                <div class="col-2">
+                    <label class="form-label">Priority</label>
+                    <select class="form-select" @bind="_newPriority">
+                        @foreach (var p in Enum.GetValues<WorkItemPriority>())
+                        {
+                            <option value="@p">@p</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-2">
+                    <label class="form-label">Type</label>
+                    <select class="form-select" @bind="_newType">
+                        @foreach (var t in Enum.GetValues<WorkItemType>())
+                        {
+                            <option value="@t">@t</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="row g-2 mb-2">
+                <div class="col">
+                    <label class="form-label">Repository</label>
+                    <select class="form-select" @bind="_newRepoName">
+                        <option value="">(none)</option>
+                        @foreach (var repo in _repos)
+                        {
+                            <option value="@repo.Name">@repo.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-2">
+                    <label class="form-label">Due</label>
+                    <input type="date" class="form-control" @bind="_newDueDate" />
+                </div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Description</label>
+                <textarea class="form-control" rows="2" @bind="_newDescription"></textarea>
+            </div>
+            <button class="btn btn-sm btn-primary" disabled="@string.IsNullOrWhiteSpace(_newTitle)" @onclick="AddTask">Create</button>
+        </div>
+    </div>
+}
+
+@if (_items is null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="board">
+        @foreach (var status in Columns)
+        {
+            <div class="board-column">
+                <div class="board-column-header">@ColumnTitle(status) <span class="text-muted">(@_items.Count(i => i.Status == status))</span></div>
+                @foreach (var item in _items.Where(i => i.Status == status).OrderByDescending(i => i.Priority))
+                {
+                    <div class="card mb-2 card-accent-@PriorityAccent(item.Priority)">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge text-bg-secondary">@item.Type</span>
+                                <button class="btn-icon" title="Delete" @onclick="() => Delete(item.Id)">&times;</button>
+                            </div>
+                            <p class="mb-2" style="font-weight: 500;">@item.Title</p>
+                            @if (!string.IsNullOrWhiteSpace(item.Description))
+                            {
+                                <p class="text-muted small mb-2">@item.Description</p>
+                            }
+                            <div class="d-flex gap-2 align-items-center mb-2 small text-muted">
+                                @if (!string.IsNullOrWhiteSpace(item.RepositoryName))
+                                {
+                                    <span><code>@item.RepositoryName</code></span>
+                                }
+                                @if (item.DueAtUtc is not null)
+                                {
+                                    <span>Due @item.DueAtUtc.Value.ToLocalTime().ToString("MMM d")</span>
+                                }
+                            </div>
+                            <select class="form-select form-select-sm" value="@item.Status" @onchange="e => MoveTo(item.Id, e.Value)">
+                                @foreach (var s in Columns)
+                                {
+                                    <option value="@s">@ColumnTitle(s)</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private static readonly WorkItemStatus[] Columns =
+    [
+        WorkItemStatus.Todo, WorkItemStatus.InProgress, WorkItemStatus.InReview,
+        WorkItemStatus.Done, WorkItemStatus.Cancelled
+    ];
+
+    private List<WorkItemDto>? _items;
+    private List<RepositoryProfileDto> _repos = [];
+    private bool _showAddForm;
+    private string _newTitle = "";
+    private string _newDescription = "";
+    private WorkItemPriority _newPriority = WorkItemPriority.Medium;
+    private WorkItemType _newType = WorkItemType.Task;
+    private string _newRepoName = "";
+    private DateTime? _newDueDate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+        _repos = await Api.GetRepositoriesAsync() ?? [];
+        Realtime.WorkItemChanged += OnWorkItemChanged;
+    }
+
+    private void OnWorkItemChanged(WorkItemDto _) => InvokeAsync(RefreshAsync);
+
+    private async Task RefreshAsync()
+    {
+        _items = await Api.GetWorkItemsAsync() ?? [];
+        StateHasChanged();
+    }
+
+    private async Task AddTask()
+    {
+        await Api.CreateWorkItemAsync(new UpsertWorkItemRequest(
+            _newTitle,
+            string.IsNullOrWhiteSpace(_newDescription) ? null : _newDescription,
+            _newPriority,
+            _newType,
+            string.IsNullOrWhiteSpace(_newRepoName) ? null : _newRepoName,
+            null,
+            _newDueDate.HasValue ? new DateTimeOffset(_newDueDate.Value) : null));
+
+        _newTitle = "";
+        _newDescription = "";
+        _newRepoName = "";
+        _newDueDate = null;
+        _showAddForm = false;
+        await RefreshAsync();
+    }
+
+    private async Task MoveTo(Guid id, object? value)
+    {
+        if (value is string s && Enum.TryParse<WorkItemStatus>(s, out var status))
+        {
+            await Api.UpdateWorkItemStatusAsync(id, status);
+            await RefreshAsync();
+        }
+    }
+
+    private async Task Delete(Guid id)
+    {
+        await Api.DeleteWorkItemAsync(id);
+        await RefreshAsync();
+    }
+
+    private static string ColumnTitle(WorkItemStatus status) => status switch
+    {
+        WorkItemStatus.InProgress => "In progress",
+        WorkItemStatus.InReview => "In review",
+        _ => status.ToString()
+    };
+
+    private static string PriorityAccent(WorkItemPriority priority) => priority switch
+    {
+        WorkItemPriority.Critical or WorkItemPriority.High => "high",
+        WorkItemPriority.Medium => "medium",
+        _ => "low"
+    };
+
+    public void Dispose()
+    {
+        Realtime.WorkItemChanged -= OnWorkItemChanged;
+    }
+}

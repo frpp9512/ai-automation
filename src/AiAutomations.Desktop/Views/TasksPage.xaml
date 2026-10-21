@@ -1,0 +1,43 @@
+<Page
+    x:Class="AiAutomations.Desktop.Views.TasksPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid Padding="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="Tasks" FontSize="24" FontWeight="SemiBold" />
+            <Button Grid.Column="1" x:Name="AddButton" Content="+ Add task" Click="OnToggleAddForm" />
+        </Grid>
+
+        <Border x:Name="AddForm" Grid.Row="1" Visibility="Collapsed" Margin="0,0,0,16" Padding="16"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
+            <StackPanel Spacing="8">
+                <TextBox x:Name="NewTitleBox" Header="Title" />
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <ComboBox x:Name="NewPriorityBox" Header="Priority" Width="160" />
+                    <ComboBox x:Name="NewTypeBox" Header="Type" Width="160" />
+                    <ComboBox x:Name="NewRepoBox" Header="Repository" Width="200" />
+                    <CalendarDatePicker x:Name="NewDueDatePicker" Header="Due" PlaceholderText="(optional)" Width="200" />
+                </StackPanel>
+                <TextBox x:Name="NewDescriptionBox" Header="Description" AcceptsReturn="True" Height="60" TextWrapping="Wrap" />
+                <Button x:Name="CreateButton" Content="Create" Style="{StaticResource AccentButtonStyle}" Click="OnCreateTask" HorizontalAlignment="Left" />
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="2" x:Name="BoardScrollViewer" HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled"
+                      DragOver="OnBoardScrollViewerDragOver">
+            <StackPanel x:Name="BoardPanel" Orientation="Horizontal" Spacing="16" />
+        </ScrollViewer>
+    </Grid>
+</Page>

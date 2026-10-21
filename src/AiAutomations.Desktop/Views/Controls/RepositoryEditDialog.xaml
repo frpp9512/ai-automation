@@ -1,0 +1,15 @@
+<ContentDialog
+    x:Class="AiAutomations.Desktop.Views.Controls.RepositoryEditDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Edit repository"
+    PrimaryButtonText="Save"
+    CloseButtonText="Cancel"
+    DefaultButton="Primary">
+
+    <StackPanel Spacing="12" MinWidth="360" MaxWidth="420">
+        <TextBox x:Name="NameBox" Header="Name" />
+        <TextBox x:Name="PathBox" Header="Path" />
+        <TextBox x:Name="KeywordsBox" Header="Keywords" PlaceholderText="comma-separated, what it's about" />
+    </StackPanel>
+</ContentDialog>

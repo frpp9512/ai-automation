@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AiAutomations.Client.Web/AiAutomations.Client.Web.csproj" />
+    <Project Path="src/AiAutomations.Core/AiAutomations.Core.csproj" />
+    <Project Path="src/AiAutomations.Desktop/AiAutomations.Desktop.csproj">
+      <Platform Solution="Debug|*" Project="x64" />
+      <Deploy Solution="Debug|*" />
+    </Project>
+    <Project Path="src/AiAutomations.Desktop.Core/AiAutomations.Desktop.Core.csproj" />
+    <Project Path="src/AiAutomations.Infrastructure/AiAutomations.Infrastructure.csproj" />
+    <Project Path="src/AiAutomations.Server/AiAutomations.Server.csproj" />
+    <Project Path="src/AiAutomations.Shared/AiAutomations.Shared.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AiAutomations.Tests/AiAutomations.Tests.csproj" />
+  </Folder>
+</Solution>

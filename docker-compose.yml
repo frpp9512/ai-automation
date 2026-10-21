@@ -1,0 +1,47 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: src/AiAutomations.Server/Dockerfile
+    ports:
+      - "5115:8080"
+    volumes:
+      - server-data:/app/data
+    environment:
+      ConnectionStrings__Default: "Data Source=/app/data/aiautomations.db"
+      ApiKey: ${API_KEY:?Set API_KEY in .env}
+      Slack__BotToken: ${SLACK_BOT_TOKEN:-}
+      Slack__AppLevelToken: ${SLACK_APP_LEVEL_TOKEN:-}
+      Slack__UserToken: ${SLACK_USER_TOKEN:-}
+      Slack__SelfUserId: ${SLACK_SELF_USER_ID:-}
+      Ai__Provider: ${AI_PROVIDER:-OpenAiCompatible}
+      Anthropic__ApiKey: ${ANTHROPIC_API_KEY:-}
+      Anthropic__Model: ${ANTHROPIC_MODEL:-claude-sonnet-5-5}
+      OpenAiCompatible__ApiKey: ${OPENAI_COMPATIBLE_API_KEY:-}
+      OpenAiCompatible__BaseUrl: ${OPENAI_COMPATIBLE_BASE_URL:-https://openrouter.ai/api/v1}
+      OpenAiCompatible__Model: ${OPENAI_COMPATIBLE_MODEL:-openrouter/free}
+      Claude__AutoLaunch: ${CLAUDE_AUTO_LAUNCH:-false}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  client:
+    build:
+      context: .
+      dockerfile: src/AiAutomations.Client.Web/Dockerfile
+    ports:
+      - "5200:8080"
+    environment:
+      Server__BaseUrl: "http://server:8080"
+      Server__ApiKey: ${API_KEY:?Set API_KEY in .env}
+    depends_on:
+      server:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  server-data:

@@ -1,0 +1,170 @@
+@using System.Text.Json
+@using AiAutomations.Client.Web.Services
+@using AiAutomations.Core.Models
+@using AiAutomations.Shared
+@inject ServerApiClient Api
+@inject IJSRuntime JS
+
+<div class="card mb-3 @(Decision is not null ? $"card-accent-{Decision.Urgency.ToString().ToLowerInvariant()}" : "")">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+            <span class="badge text-bg-secondary">@Action.Type</span>
+            @if (Decision is not null)
+            {
+                <span class="badge @UrgencyClass(Decision.Urgency)">@Decision.Urgency</span>
+                @if (Decision.Confidence < 0.5)
+                {
+                    <span class="badge text-bg-warning" title="The AI wasn't confident here - check the details before approving">Needs review</span>
+                }
+            }
+            @if (Message is not null)
+            {
+                <span class="text-muted small ms-2">@(Message.IsDirectMessage ? "DM" : "mention") from @Message.DisplayName</span>
+                @if (!string.IsNullOrWhiteSpace(Message.Permalink))
+                {
+                    <a class="small ms-2" href="@Message.Permalink" target="_blank" rel="noopener noreferrer">View in Slack</a>
+                }
+            }
+        </div>
+        <span class="text-muted small">@Action.CreatedAtUtc.ToLocalTime().ToString("g")</span>
+    </div>
+    <div class="card-body">
+        @if (Message is not null)
+        {
+            <p class="text-muted fst-italic">"@Message.Text"</p>
+        }
+
+        @if (Action.Type == ActionType.Reply)
+        {
+            <textarea class="form-control mb-2" rows="3" @bind="_editedText"></textarea>
+        }
+        else if (Action.Type == ActionType.TaskBrief)
+        {
+            <div class="mb-2">
+                <label class="form-label small">Repository</label>
+                <select class="form-select form-select-sm" style="max-width: 320px;" @bind="_selectedRepoId">
+                    <option value="">(none)</option>
+                    @foreach (var repo in Repositories)
+                    {
+                        <option value="@repo.Id">@repo.Name</option>
+                    }
+                </select>
+            </div>
+            @if (string.IsNullOrWhiteSpace(_brief?.Brief))
+            {
+                <p class="text-muted small">The AI didn't have enough to go on here - write the task yourself below.</p>
+            }
+            <textarea class="form-control font-mono mb-2" rows="8" @bind="_editedBrief"></textarea>
+            <button class="btn btn-sm btn-outline-secondary mb-2" @onclick="CopyBrief">Copy brief</button>
+        }
+        else if (Action.Type == ActionType.Ticket)
+        {
+            <div class="mb-2">
+                <label class="form-label small">Repository</label>
+                <select class="form-select form-select-sm" style="max-width: 320px;" @bind="_selectedRepoId">
+                    <option value="">(none)</option>
+                    @foreach (var repo in Repositories)
+                    {
+                        <option value="@repo.Id">@repo.Name</option>
+                    }
+                </select>
+            </div>
+            <input class="form-control mb-2" @bind="_editedText" />
+            <p class="text-muted small">Approving this creates a task on the <a href="/tasks">Tasks</a> board.</p>
+        }
+        else
+        {
+            <p>@Action.Payload</p>
+        }
+    </div>
+    <div class="card-footer d-flex gap-2">
+        <button class="btn btn-sm btn-success" @onclick="Approve">Approve</button>
+        <button class="btn btn-sm btn-outline-danger" @onclick="Reject">Reject</button>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public required ActionItemDto Action { get; set; }
+    [Parameter] public MessageDecisionDto? Decision { get; set; }
+    [Parameter] public SlackMessageDto? Message { get; set; }
+    [Parameter] public required List<RepositoryProfileDto> Repositories { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+
+    private string _editedText = "";
+    private string _selectedRepoId = "";
+    private string _editedBrief = "";
+    private TaskBriefPayload? _brief;
+
+    protected override void OnParametersSet()
+    {
+        if (Action.Type == ActionType.Reply)
+        {
+            _editedText = Action.Payload ?? "";
+        }
+        else if (Action.Type == ActionType.TaskBrief && !string.IsNullOrWhiteSpace(Action.Payload))
+        {
+            _brief = JsonSerializer.Deserialize<TaskBriefPayload>(Action.Payload, JsonOptions);
+            _editedBrief = _brief?.Brief ?? "";
+            var matched = Repositories.FirstOrDefault(r => r.Name == _brief?.RepoName);
+            _selectedRepoId = matched?.Id.ToString() ?? "";
+        }
+        else if (Action.Type == ActionType.Ticket)
+        {
+            var ticket = string.IsNullOrWhiteSpace(Action.Payload)
+                ? null
+                : JsonSerializer.Deserialize<TicketPayload>(Action.Payload, JsonOptions);
+            _editedText = ticket?.Title ?? Decision?.Summary ?? "";
+            var matched = Repositories.FirstOrDefault(r => r.Name == ticket?.RepositoryName);
+            _selectedRepoId = matched?.Id.ToString() ?? "";
+        }
+    }
+
+    private string? BuildEditedPayload()
+    {
+        if (Action.Type == ActionType.Reply)
+        {
+            return _editedText;
+        }
+
+        if (Action.Type == ActionType.TaskBrief && _brief is not null)
+        {
+            var repo = Guid.TryParse(_selectedRepoId, out var id) ? Repositories.FirstOrDefault(r => r.Id == id) : null;
+            var updated = _brief with { RepoName = repo?.Name, RepoPath = repo?.Path, Prompt = _editedBrief, Brief = _editedBrief };
+            return JsonSerializer.Serialize(updated);
+        }
+
+        if (Action.Type == ActionType.Ticket)
+        {
+            var repo = Guid.TryParse(_selectedRepoId, out var id) ? Repositories.FirstOrDefault(r => r.Id == id) : null;
+            return JsonSerializer.Serialize(new TicketPayload(_editedText, repo?.Name));
+        }
+
+        return null;
+    }
+
+    private async Task Approve()
+    {
+        await Api.ApproveActionAsync(Action.Id, BuildEditedPayload());
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task Reject()
+    {
+        await Api.RejectActionAsync(Action.Id);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task CopyBrief()
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", _editedBrief);
+    }
+
+    private static string UrgencyClass(Urgency urgency) => urgency switch
+    {
+        Urgency.High => "text-bg-danger",
+        Urgency.Medium => "text-bg-warning",
+        _ => "text-bg-light"
+    };
+}

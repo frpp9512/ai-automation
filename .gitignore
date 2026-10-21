@@ -1,0 +1,26 @@
+bin/
+obj/
+*.db
+*.db-shm
+*.db-wal
+.vs/
+*.user
+.env
+
+# WinUI3/MSIX build output
+AppPackages/
+BundleArtifacts/
+*.appx
+*.appxbundle
+*.appxsym
+*.appxupload
+*.msix
+*.msixbundle
+*.cer
+*.pfx
+
+# Misc build/IDE noise
+*.binlog
+TestResults/
+.idea/
+

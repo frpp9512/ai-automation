@@ -1,0 +1,80 @@
+@page "/history"
+@rendermode InteractiveServer
+@using AiAutomations.Client.Web.Services
+@using AiAutomations.Core.Models
+@using AiAutomations.Shared
+@inject ServerApiClient Api
+
+<PageTitle>History</PageTitle>
+
+<h1>History</h1>
+<p class="text-muted">
+    Every message that's been triaged, including ones the AI decided didn't need any action
+    (so nothing silently disappears).
+</p>
+
+@if (_rows is null)
+{
+    <p><em>Loading...</em></p>
+}
+else if (_rows.Count == 0)
+{
+    <p>Nothing triaged yet.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+        <tr>
+            <th>When</th>
+            <th>From</th>
+            <th>Intent</th>
+            <th>Summary</th>
+        </tr>
+        </thead>
+        <tbody>
+        @foreach (var row in _rows)
+        {
+            <tr>
+                <td class="small text-muted">@row.Decision.CreatedAtUtc.ToLocalTime().ToString("g")</td>
+                <td class="small">
+                    @(row.Message?.IsDirectMessage == true ? "DM" : "mention") @row.Message?.DisplayName
+                    @if (!string.IsNullOrWhiteSpace(row.Message?.Permalink))
+                    {
+                        <a href="@row.Message.Permalink" target="_blank" rel="noopener noreferrer">↗</a>
+                    }
+                </td>
+                <td><span class="badge @IntentClass(row.Decision.Intent)">@row.Decision.Intent</span></td>
+                <td>@row.Decision.Summary</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code {
+    private record Row(MessageDecisionDto Decision, SlackMessageDto? Message);
+    private List<Row>? _rows;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var decisionsTask = Api.GetRecentDecisionsAsync(200);
+        var messagesTask = Api.GetRecentMessagesAsync(200);
+        await Task.WhenAll(decisionsTask, messagesTask);
+
+        var messagesById = (await messagesTask ?? []).ToDictionary(m => m.Id);
+        _rows = (await decisionsTask ?? [])
+            .OrderByDescending(d => d.CreatedAtUtc)
+            .Select(d => new Row(d, messagesById.GetValueOrDefault(d.MessageId)))
+            .ToList();
+    }
+
+    private static string IntentClass(MessageIntent intent) => intent switch
+    {
+        MessageIntent.FyiOnly => "text-bg-light",
+        MessageIntent.ReplyNeeded => "text-bg-secondary",
+        MessageIntent.TaskNeeded => "text-bg-warning",
+        MessageIntent.ImplementationNeeded or MessageIntent.PlanningNeeded => "text-bg-danger",
+        _ => "text-bg-light"
+    };
+}

@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>db888dff-f623-4eb6-99be-f4150aeac2c9</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AiAutomations.Core\AiAutomations.Core.csproj" />
+    <ProjectReference Include="..\AiAutomations.Infrastructure\AiAutomations.Infrastructure.csproj" />
+    <ProjectReference Include="..\AiAutomations.Shared\AiAutomations.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,27 @@
+<UserControl
+    x:Class="AiAutomations.Desktop.Views.Controls.HealthStripControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Button Background="Transparent" BorderThickness="0" Padding="6,2" Click="OnClick"
+            ToolTipService.ToolTip="Health - click for details">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+                <Ellipse x:Name="DbDot" Width="7" Height="7" Fill="Gray" />
+                <TextBlock Text="DB" FontSize="11" Foreground="Gray" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="4">
+                <Ellipse x:Name="SlackDot" Width="7" Height="7" Fill="Gray" />
+                <TextBlock Text="Slack" FontSize="11" Foreground="Gray" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="4">
+                <Ellipse x:Name="AiDot" Width="7" Height="7" Fill="Gray" />
+                <TextBlock x:Name="AiLabel" Text="AI" FontSize="11" Foreground="Gray" />
+            </StackPanel>
+            <StackPanel x:Name="PendingPanel" Orientation="Horizontal" Spacing="4" Visibility="Collapsed">
+                <ProgressRing Width="10" Height="10" IsActive="True" />
+                <TextBlock x:Name="PendingText" FontSize="11" Foreground="Gray" />
+            </StackPanel>
+        </StackPanel>
+    </Button>
+</UserControl>

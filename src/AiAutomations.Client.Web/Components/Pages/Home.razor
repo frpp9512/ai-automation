@@ -1,0 +1,155 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@using AiAutomations.Client.Web.Services
+@using AiAutomations.Shared
+@inject ServerApiClient Api
+@inject RealtimeClient Realtime
+@implements IDisposable
+
+<PageTitle>Inbox</PageTitle>
+
+<h1>Inbox</h1>
+
+<div class="card mb-3" style="max-width: 500px;">
+    <div class="card-body">
+        <h5 class="card-title">Catch up on past messages</h5>
+        <p class="card-text text-muted">
+            Find messages sent to you or mentioning you in a date range, and run them through
+            the same triage as a live message.
+        </p>
+        <div class="row g-2 mb-2">
+            <div class="col">
+                <input type="date" class="form-control" @bind="_backfillFrom" disabled="@_backfillRunning" />
+            </div>
+            <div class="col">
+                <input type="date" class="form-control" @bind="_backfillTo" disabled="@_backfillRunning" />
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary" disabled="@_backfillRunning" @onclick="RunBackfill">
+                    @if (_backfillRunning)
+                    {
+                        <span class="spinner"></span>
+                        <text>Running...</text>
+                    }
+                    else
+                    {
+                        <text>Backfill</text>
+                    }
+                </button>
+            </div>
+        </div>
+
+        @if (_backfillRunning)
+        {
+            <div class="alert alert-info">
+                <span class="spinner"></span>
+                Searching Slack from @_backfillFrom.ToString("MMM d") to @_backfillTo.ToString("MMM d")...
+            </div>
+        }
+        else if (_backfillError is not null)
+        {
+            <div class="alert alert-danger">
+                <strong>Backfill failed.</strong> @_backfillError
+            </div>
+        }
+        else if (_backfillResult is not null)
+        {
+            <div class="alert alert-success">
+                <strong>Backfill complete</strong>
+                <span class="text-muted small">(@_backfillCompletedAt?.ToLocalTime().ToString("t"))</span>
+                <br />
+                Found @_backfillResult.MessagesFound message(s) - ingested @_backfillResult.NewMessages new,
+                @_backfillResult.Skipped already seen.
+            </div>
+        }
+    </div>
+</div>
+
+@if (_actions is null || _repos is null)
+{
+    <p><em>Loading...</em></p>
+}
+else if (_actions.Count == 0)
+{
+    <p>Nothing pending approval.</p>
+}
+else
+{
+    @foreach (var action in _actions)
+    {
+        <ActionCard Action="action"
+                    Decision="_decisionsById.GetValueOrDefault(action.DecisionId)"
+                    Message="MessageForAction(action)"
+                    Repositories="_repos"
+                    OnChanged="RefreshAsync" />
+    }
+}
+
+@code {
+    private List<ActionItemDto>? _actions;
+    private List<RepositoryProfileDto>? _repos;
+    private Dictionary<Guid, MessageDecisionDto> _decisionsById = [];
+    private Dictionary<Guid, SlackMessageDto> _messagesById = [];
+    private DateTime _backfillFrom = DateTime.Today.AddDays(-7);
+    private DateTime _backfillTo = DateTime.Today;
+    private bool _backfillRunning;
+    private BackfillResultDto? _backfillResult;
+    private string? _backfillError;
+    private DateTimeOffset? _backfillCompletedAt;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+        Realtime.ActionStatusChanged += OnActionStatusChanged;
+    }
+
+    private SlackMessageDto? MessageForAction(ActionItemDto action) =>
+        _decisionsById.TryGetValue(action.DecisionId, out var decision)
+            ? _messagesById.GetValueOrDefault(decision.MessageId)
+            : null;
+
+    private void OnActionStatusChanged(ActionItemDto updated) => InvokeAsync(RefreshAsync);
+
+    private async Task RefreshAsync()
+    {
+        var actionsTask = Api.GetPendingActionsAsync();
+        var decisionsTask = Api.GetRecentDecisionsAsync(200);
+        var messagesTask = Api.GetRecentMessagesAsync(200);
+        var reposTask = Api.GetRepositoriesAsync();
+        await Task.WhenAll(actionsTask, decisionsTask, messagesTask, reposTask);
+
+        _actions = await actionsTask ?? [];
+        _decisionsById = (await decisionsTask ?? []).ToDictionary(d => d.Id);
+        _messagesById = (await messagesTask ?? []).ToDictionary(m => m.Id);
+        _repos = await reposTask ?? [];
+        StateHasChanged();
+    }
+
+    private async Task RunBackfill()
+    {
+        _backfillRunning = true;
+        _backfillResult = null;
+        _backfillError = null;
+        StateHasChanged();
+
+        try
+        {
+            _backfillResult = await Api.BackfillAsync(_backfillFrom, _backfillTo.AddDays(1).AddTicks(-1));
+            _backfillCompletedAt = DateTimeOffset.Now;
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            _backfillError = ex.Message;
+        }
+        finally
+        {
+            _backfillRunning = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        Realtime.ActionStatusChanged -= OnActionStatusChanged;
+    }
+}

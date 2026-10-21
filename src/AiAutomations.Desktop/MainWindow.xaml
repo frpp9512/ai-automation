@@ -1,0 +1,90 @@
+<Window
+    x:Class="AiAutomations.Desktop.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:AiAutomations.Desktop.Views.Controls">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="40" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid x:Name="AppTitleBar" Grid.Row="0" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Image Grid.Column="0" Source="Assets/Square44x44Logo.png" Width="18" Height="18"
+                   Margin="16,0,8,0" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="AI Automations" VerticalAlignment="Center" FontSize="12" />
+
+            <!-- Always visible regardless of page, which is why these live in the title bar
+                 rather than any one page - margin on the right clears the system caption buttons,
+                 which ExtendsContentIntoTitleBar leaves the OS to draw on top of this row. -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" Margin="0,0,140,0" VerticalAlignment="Center">
+                <controls:HealthStripControl x:Name="HealthStrip" VerticalAlignment="Center" />
+
+                <!-- A plain Light/Dark toggle - Auto is deliberately only offered from Settings,
+                     not here, so this control never needs to show a third state. -->
+                <Button x:Name="ThemeSwitcherButton" Background="Transparent" BorderThickness="0"
+                        Padding="6,2" VerticalAlignment="Center" ToolTipService.ToolTip="Toggle light/dark theme"
+                        Click="OnThemeToggleClick">
+                    <FontIcon x:Name="ThemeSwitcherIcon" Glyph="&#xE708;" FontSize="14" />
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <NavigationView Grid.Row="1" x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="False"
+                        PaneDisplayMode="Left" SelectionChanged="OnNavSelectionChanged"
+                        Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+            <NavigationView.Resources>
+                <SolidColorBrush x:Key="NavigationViewDefaultPaneBackground" Color="{ThemeResource SolidBackgroundFillColorBase}" />
+            </NavigationView.Resources>
+            <NavigationView.MenuItems>
+                <NavigationViewItem Content="Dashboard" Tag="Dashboard">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE80F;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Inbox" Tag="Inbox">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8BD;" />
+                    </NavigationViewItem.Icon>
+                    <NavigationViewItem.InfoBadge>
+                        <InfoBadge x:Name="InboxBadge" Visibility="Collapsed" />
+                    </NavigationViewItem.InfoBadge>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Tasks" Tag="Tasks">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE9D9;" />
+                    </NavigationViewItem.Icon>
+                    <NavigationViewItem.InfoBadge>
+                        <InfoBadge x:Name="TasksBadge" Visibility="Collapsed" />
+                    </NavigationViewItem.InfoBadge>
+                </NavigationViewItem>
+                <NavigationViewItem Content="History" Tag="History">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE81C;" />
+                    </NavigationViewItem.Icon>
+                    <NavigationViewItem.InfoBadge>
+                        <InfoBadge x:Name="HistoryBadge" Visibility="Collapsed" />
+                    </NavigationViewItem.InfoBadge>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Settings" Tag="Settings">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE713;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="About" Tag="About">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE946;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+
+            <Frame x:Name="ContentFrame" />
+        </NavigationView>
+    </Grid>
+</Window>

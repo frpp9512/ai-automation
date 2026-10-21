@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+**/.vs/
+**/*.db
+**/*.db-shm
+**/*.db-wal
+.git/
+.gitignore
+.dockerignore
+*.md
+slack-app-manifest.yaml
