@@ -15,6 +15,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<WorkItem> WorkItems => Set<WorkItem>();
     public DbSet<WorkItemComment> WorkItemComments => Set<WorkItemComment>();
     public DbSet<AiUsageRecord> AiUsageRecords => Set<AiUsageRecord>();
+    public DbSet<OpenProjectSyncRun> OpenProjectSyncRuns => Set<OpenProjectSyncRun>();
 
     // SQLite's EF provider can't ORDER BY a raw DateTimeOffset column, so store it
     // as a sortable binary representation instead (round-trips exactly).

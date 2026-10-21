@@ -26,4 +26,7 @@ public class SignalRRealtimeNotifier(IHubContext<InboxHub> hub) : IRealtimeNotif
 
     public Task WorkItemCommentAddedAsync(WorkItem workItem, WorkItemComment comment) =>
         hub.Clients.All.SendAsync(HubEvents.WorkItemCommentAdded, workItem.ToDto(), comment.ToDto());
+
+    public Task OpenProjectSyncCompletedAsync(OpenProjectSyncRun run) =>
+        hub.Clients.All.SendAsync(HubEvents.OpenProjectSyncCompleted, run.ToDto());
 }

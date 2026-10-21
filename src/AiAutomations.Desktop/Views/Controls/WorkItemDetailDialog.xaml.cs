@@ -44,11 +44,71 @@ public sealed partial class WorkItemDetailDialog : ContentDialog
         PercentSlider.Value = item.PercentComplete;
         PercentLabel.Text = $"{item.PercentComplete}%";
 
+        var linkedToOpenProject = item.ExternalSystem == "OpenProject";
+        PushPercentButton.Visibility = linkedToOpenProject ? Visibility.Visible : Visibility.Collapsed;
+        AlsoPostToOpenProjectBox.Visibility = linkedToOpenProject ? Visibility.Visible : Visibility.Collapsed;
+        if (linkedToOpenProject && !string.IsNullOrWhiteSpace(item.ExternalUrl))
+        {
+            OpenProjectLink.Visibility = Visibility.Visible;
+        }
+
         Loaded += async (_, _) =>
         {
             await LoadCommentsAsync();
             await LoadSourceMessageLinkAsync();
         };
+    }
+
+    private async void OnViewInOpenProject(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(_item.ExternalUrl) && Uri.TryCreate(_item.ExternalUrl, UriKind.Absolute, out var uri))
+        {
+            await Windows.System.Launcher.LaunchUriAsync(uri);
+        }
+    }
+
+    /// <summary>
+    /// Pushes the on-screen % value (not necessarily what's already saved) - saves it locally
+    /// first via UpdateWorkItemAsync, matching this dialog's other fields, then pushes that same
+    /// value to OpenProject. Both are explicit, user-triggered actions - never automatic.
+    /// </summary>
+    private async void OnPushPercent(object sender, RoutedEventArgs e)
+    {
+        PushPercentButton.IsEnabled = false;
+        PushPercentSpinner.IsActive = true;
+        PushPercentSpinner.Visibility = Visibility.Visible;
+        PushPercentButtonText.Text = "Pushing...";
+
+        try
+        {
+            PushPercentErrorBar.IsOpen = false;
+
+            var repoName = RepoBox.SelectedItem as string;
+            var request = new UpdateWorkItemRequest(
+                TitleBox.Text,
+                string.IsNullOrWhiteSpace(DescriptionBox.Text) ? null : DescriptionBox.Text,
+                PriorityBox.SelectedItem as WorkItemPriority? ?? _item.Priority,
+                TypeBox.SelectedItem as WorkItemType? ?? _item.Type,
+                repoName is null or NoRepoOption ? null : repoName,
+                _item.Labels,
+                DueDatePicker.Date,
+                (int)PercentSlider.Value);
+
+            await _triageAppService.UpdateWorkItemAsync(_item.Id, request);
+            await _triageAppService.PushWorkItemPercentToOpenProjectAsync(_item.Id);
+        }
+        catch (Exception ex)
+        {
+            PushPercentErrorBar.Message = ex.Message;
+            PushPercentErrorBar.IsOpen = true;
+        }
+        finally
+        {
+            PushPercentButton.IsEnabled = true;
+            PushPercentSpinner.IsActive = false;
+            PushPercentSpinner.Visibility = Visibility.Collapsed;
+            PushPercentButtonText.Text = "Push % to OpenProject";
+        }
     }
 
     private async Task LoadSourceMessageLinkAsync()
@@ -143,9 +203,29 @@ public sealed partial class WorkItemDetailDialog : ContentDialog
             return;
         }
 
-        await _triageAppService.AddCommentAsync(_item.Id, NewCommentBox.Text);
-        NewCommentBox.Text = string.Empty;
-        await LoadCommentsAsync();
+        try
+        {
+            PushCommentErrorBar.IsOpen = false;
+
+            if (AlsoPostToOpenProjectBox.Visibility == Visibility.Visible && AlsoPostToOpenProjectBox.IsChecked == true)
+            {
+                // Pushes to OpenProject and records the local comment in one call - see
+                // TriageAppService.PushWorkItemCommentToOpenProjectAsync.
+                await _triageAppService.PushWorkItemCommentToOpenProjectAsync(_item.Id, NewCommentBox.Text);
+            }
+            else
+            {
+                await _triageAppService.AddCommentAsync(_item.Id, NewCommentBox.Text);
+            }
+
+            NewCommentBox.Text = string.Empty;
+            await LoadCommentsAsync();
+        }
+        catch (Exception ex)
+        {
+            PushCommentErrorBar.Message = ex.Message;
+            PushCommentErrorBar.IsOpen = true;
+        }
     }
 
     private async void OnRefineComment(object sender, RoutedEventArgs e)

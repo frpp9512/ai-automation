@@ -76,6 +76,7 @@ public sealed partial class HealthStripControl : UserControl
         SetDot(SlackDot, health?.SlackConnected);
         SetDot(AiDot, health?.AiProviderConfigured);
         AiLabel.Text = health is null ? "AI" : $"AI ({health.AiProvider})";
+        SetDot(OpenProjectDot, health?.OpenProjectConnected);
 
         var pending = health?.PendingMessageCount ?? 0;
         PendingPanel.Visibility = pending > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -108,6 +109,12 @@ public sealed partial class HealthStripControl : UserControl
         {
             toasts.ShowHealthChangedToast("AI provider status changed",
                 current.AiProviderConfigured ? $"{current.AiProvider} is configured." : $"{current.AiProvider} is missing an API key.");
+        }
+
+        if (previous.OpenProjectConnected != current.OpenProjectConnected)
+        {
+            toasts.ShowHealthChangedToast("OpenProject connection changed",
+                current.OpenProjectConnected ? "OpenProject sync is connected again." : "The last OpenProject sync attempt failed.");
         }
     }
 

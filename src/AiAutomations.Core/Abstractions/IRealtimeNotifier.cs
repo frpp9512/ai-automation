@@ -20,4 +20,8 @@ public interface IRealtimeNotifier
     /// UI can choose to surface a "task updated" notification only for this, not for every
     /// manual edit too.</summary>
     Task WorkItemCommentAddedAsync(WorkItem workItem, WorkItemComment comment);
+
+    /// <summary>Fired once per OpenProjectSyncHostedService run - lets the UI show a single
+    /// summary notification for the whole run instead of one per synced item.</summary>
+    Task OpenProjectSyncCompletedAsync(OpenProjectSyncRun run);
 }

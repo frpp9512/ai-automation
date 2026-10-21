@@ -39,6 +39,13 @@ public static class DesktopConfiguration
           },
           "Claude": {
             "AutoLaunch": false
+          },
+          "OpenProject": {
+            "BaseUrl": "",
+            "ApiToken": "",
+            "SyncIntervalMinutes": 15,
+            "StatusFilter": "all",
+            "RepositoryMatchConfidenceThreshold": 80
           }
         }
         """;

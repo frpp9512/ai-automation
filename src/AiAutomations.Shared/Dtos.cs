@@ -91,7 +91,13 @@ public record RepositoryProfileDto(Guid Id, string Name, string Path, string? Ke
 
 public record UpsertRepositoryRequest(string Name, string Path, string? Keywords);
 
-public record HealthStatusDto(bool DatabaseOk, bool SlackConnected, bool AiProviderConfigured, string AiProvider, int PendingMessageCount = 0);
+public record HealthStatusDto(
+    bool DatabaseOk,
+    bool SlackConnected,
+    bool AiProviderConfigured,
+    string AiProvider,
+    int PendingMessageCount = 0,
+    bool OpenProjectConnected = false);
 
 /// <summary>AI token/cost usage over a trailing window (currently the last 24 hours) - see
 /// TriageAppService.GetAiUsageSummaryAsync. EstimatedCostUsd is null when none of the window's
@@ -128,7 +134,10 @@ public record WorkItemDto(
     Guid? SourceDecisionId,
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset UpdatedAtUtc,
-    DateTimeOffset? CompletedAtUtc);
+    DateTimeOffset? CompletedAtUtc,
+    DateTimeOffset? LastSyncedAtUtc,
+    string? SyncError,
+    bool RepositoryAssignmentConfirmed);
 
 public record UpsertWorkItemRequest(
     string Title,
@@ -156,3 +165,14 @@ public record UpdateWorkItemStatusRequest(WorkItemStatus Status);
 public record WorkItemCommentDto(Guid Id, Guid WorkItemId, string Text, bool IsAutomated, DateTimeOffset CreatedAtUtc);
 
 public record AddWorkItemCommentRequest(string Text);
+
+/// <summary>One OpenProjectSyncHostedService run, for the Settings page / health details'
+/// sync-status display.</summary>
+public record OpenProjectSyncRunDto(
+    Guid Id,
+    DateTimeOffset StartedAtUtc,
+    DateTimeOffset? CompletedAtUtc,
+    int ItemsCreated,
+    int ItemsUpdated,
+    int ItemsFailed,
+    string? ErrorMessage);

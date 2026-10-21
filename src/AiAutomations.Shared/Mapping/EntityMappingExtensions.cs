@@ -26,7 +26,11 @@ public static class EntityMappingExtensions
     public static WorkItemDto ToDto(this WorkItem w) => new(
         w.Id, w.Title, w.Description, w.Status, w.Priority, w.Type, w.RepositoryName, w.Labels,
         w.DueAtUtc, w.PercentComplete, w.ExternalSystem, w.ExternalId, w.ExternalUrl, w.SourceDecisionId,
-        w.CreatedAtUtc, w.UpdatedAtUtc, w.CompletedAtUtc);
+        w.CreatedAtUtc, w.UpdatedAtUtc, w.CompletedAtUtc,
+        w.LastSyncedAtUtc, w.SyncError, w.RepositoryAssignmentConfirmed);
 
     public static WorkItemCommentDto ToDto(this WorkItemComment c) => new(c.Id, c.WorkItemId, c.Text, c.IsAutomated, c.CreatedAtUtc);
+
+    public static OpenProjectSyncRunDto ToDto(this OpenProjectSyncRun r) => new(
+        r.Id, r.StartedAtUtc, r.CompletedAtUtc, r.ItemsCreated, r.ItemsUpdated, r.ItemsFailed, r.ErrorMessage);
 }

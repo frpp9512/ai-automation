@@ -147,6 +147,23 @@ deliberate choice:
   the channel ID is correct. `SlackGateway.SendReplyAsync` falls back to the user token with
   `AsUser = true` on that specific error; the user token needs its own `chat:write` scope for the
   fallback to actually work (see `ARCHITECTURE.md`'s Slack app setup section).
+- **A singleton gateway with connection state can't use `AddHttpClient<TClient,TImpl>()` directly**
+  - that registers the typed client itself (`IOpenProjectGateway`, `IAiDecisionEngine`, etc.) with
+  a transient lifetime, so a stateful field like `IsConnected` resets to its default on every DI
+  resolution instead of persisting across callers. `OpenProjectGateway` (the one gateway that
+  needs persistent state, unlike the stateless AI decision engines) works around this by
+  registering a named client via `services.AddHttpClient(name)` and wrapping it in an explicit
+  `services.AddSingleton<IOpenProjectGateway>(sp => new OpenProjectGateway(sp.GetRequiredService<IHttpClientFactory>().CreateClient(name), ...))`
+  instead - still gets pooled connections via `IHttpClientFactory`, but one gateway instance for
+  the app's lifetime. `SlackGateway` avoids this entirely by not using `IHttpClientFactory` at all
+  (it's `AddSingleton<ISlackGateway, SlackGateway>()` over the `SlackNet` library's own transport).
+- **A portable `IHostedService` that also needs a manually-triggerable method** (not just
+  start/stop) - `OpenProjectSyncHostedService.RunNowAsync()`, called by the Settings page's
+  "Sync now" button - needs registering as both a singleton of its own type *and* the
+  `IHostedService` the host starts: `services.AddSingleton<T>(); services.AddHostedService(sp =>
+  sp.GetRequiredService<T>());` (not `services.AddHostedService<T>()`, which only registers it
+  under `IHostedService` and leaves `GetRequiredService<T>()` unresolvable) - see
+  `AddInfrastructure`.
 - **Message-burst debouncing**: a live message is persisted immediately (so it shows up in
   history right away) but AI classification is debounced per-conversation via
   `IMessageAggregationBuffer` - a few messages sent in quick succession cost one classification

@@ -26,7 +26,12 @@ public static class DesktopSettingsEditor
             AnthropicModel: Get(root, "Anthropic", "Model") is { Length: > 0 } am ? am : "claude-sonnet-5-5",
             OpenAiCompatibleApiKey: Get(root, "OpenAiCompatible", "ApiKey"),
             OpenAiCompatibleBaseUrl: Get(root, "OpenAiCompatible", "BaseUrl") is { Length: > 0 } bu ? bu : "https://openrouter.ai/api/v1",
-            OpenAiCompatibleModel: Get(root, "OpenAiCompatible", "Model") is { Length: > 0 } om ? om : "openrouter/free");
+            OpenAiCompatibleModel: Get(root, "OpenAiCompatible", "Model") is { Length: > 0 } om ? om : "openrouter/free",
+            OpenProjectBaseUrl: Get(root, "OpenProject", "BaseUrl"),
+            OpenProjectApiToken: Get(root, "OpenProject", "ApiToken"),
+            OpenProjectSyncIntervalMinutes: GetInt(root, "OpenProject", "SyncIntervalMinutes") ?? 15,
+            OpenProjectStatusFilter: Get(root, "OpenProject", "StatusFilter") is { Length: > 0 } sf ? sf : "all",
+            OpenProjectRepositoryMatchConfidenceThreshold: GetInt(root, "OpenProject", "RepositoryMatchConfidenceThreshold") ?? 80);
     }
 
     public static void Save(DesktopSettingsValues values)
@@ -44,6 +49,11 @@ public static class DesktopSettingsEditor
         Set(root, "OpenAiCompatible", "ApiKey", values.OpenAiCompatibleApiKey);
         Set(root, "OpenAiCompatible", "BaseUrl", values.OpenAiCompatibleBaseUrl);
         Set(root, "OpenAiCompatible", "Model", values.OpenAiCompatibleModel);
+        Set(root, "OpenProject", "BaseUrl", values.OpenProjectBaseUrl);
+        Set(root, "OpenProject", "ApiToken", values.OpenProjectApiToken);
+        SetInt(root, "OpenProject", "SyncIntervalMinutes", values.OpenProjectSyncIntervalMinutes);
+        Set(root, "OpenProject", "StatusFilter", values.OpenProjectStatusFilter);
+        SetInt(root, "OpenProject", "RepositoryMatchConfidenceThreshold", values.OpenProjectRepositoryMatchConfidenceThreshold);
 
         // Fields this editor doesn't expose - leave as-is if present, default a brand-new file.
         EnsureDefault(root, "ConnectionStrings", "Default", "Data Source=aiautomations.db");
@@ -85,6 +95,20 @@ public static class DesktopSettingsEditor
     private static string? Get(JsonObject root, string section, string key) =>
         (root[section] as JsonObject)?[key]?.GetValue<string>();
 
+    private static int? GetInt(JsonObject root, string section, string key) =>
+        (root[section] as JsonObject)?[key] is JsonValue value && value.TryGetValue<int>(out var i) ? i : null;
+
+    private static void SetInt(JsonObject root, string section, string key, int value)
+    {
+        if (root[section] is not JsonObject sectionNode)
+        {
+            sectionNode = new JsonObject();
+            root[section] = sectionNode;
+        }
+
+        sectionNode[key] = JsonValue.Create(value);
+    }
+
     private static void Set(JsonObject root, string section, string key, string? value)
     {
         if (root[section] is not JsonObject sectionNode)
@@ -118,4 +142,9 @@ public record DesktopSettingsValues(
     string AnthropicModel,
     string? OpenAiCompatibleApiKey,
     string OpenAiCompatibleBaseUrl,
-    string OpenAiCompatibleModel);
+    string OpenAiCompatibleModel,
+    string? OpenProjectBaseUrl,
+    string? OpenProjectApiToken,
+    int OpenProjectSyncIntervalMinutes,
+    string OpenProjectStatusFilter,
+    int OpenProjectRepositoryMatchConfidenceThreshold);

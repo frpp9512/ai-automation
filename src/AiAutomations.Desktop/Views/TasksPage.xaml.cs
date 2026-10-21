@@ -98,10 +98,11 @@ public sealed partial class TasksPage : Page
             foreach (var item in itemsInColumn)
             {
                 var card = new WorkItemCardControl { CanDrag = true };
-                card.Populate(item, _commentCounts.GetValueOrDefault(item.Id));
+                card.Populate(item, _commentCounts.GetValueOrDefault(item.Id), _repos.Select(r => r.Name).ToList());
                 card.StatusChanged += async (i, s) => await MoveToAsync(i, s);
                 card.DeleteRequested += async i => await DeleteAsync(i);
                 card.EditRequested += OnEditRequested;
+                card.RepositoryConfirmed += async (i, repo) => await ConfirmRepositoryAsync(i, repo);
                 card.DragStarting += (_, e) => e.Data.SetText(item.Id.ToString());
                 column.Children.Add(card);
             }
@@ -230,6 +231,12 @@ public sealed partial class TasksPage : Page
     private async Task DeleteAsync(WorkItemDto item)
     {
         await _triageAppService.DeleteWorkItemAsync(item.Id);
+        await RefreshAsync();
+    }
+
+    private async Task ConfirmRepositoryAsync(WorkItemDto item, string? repositoryName)
+    {
+        await _triageAppService.ConfirmWorkItemRepositoryAsync(item.Id, repositoryName);
         await RefreshAsync();
     }
 

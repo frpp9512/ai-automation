@@ -18,6 +18,7 @@ public class DesktopRealtimeNotifier : IRealtimeNotifier
     public event Action<ClaudeSessionDto>? SessionStatusChanged;
     public event Action<WorkItemDto>? WorkItemChanged;
     public event Action<WorkItemDto, WorkItemCommentDto>? WorkItemCommentAdded;
+    public event Action<OpenProjectSyncRunDto>? OpenProjectSyncCompleted;
 
     public Task MessageReceivedAsync(SlackMessage message)
     {
@@ -52,6 +53,12 @@ public class DesktopRealtimeNotifier : IRealtimeNotifier
     public Task WorkItemCommentAddedAsync(WorkItem workItem, WorkItemComment comment)
     {
         WorkItemCommentAdded?.Invoke(workItem.ToDto(), comment.ToDto());
+        return Task.CompletedTask;
+    }
+
+    public Task OpenProjectSyncCompletedAsync(OpenProjectSyncRun run)
+    {
+        OpenProjectSyncCompleted?.Invoke(run.ToDto());
         return Task.CompletedTask;
     }
 }

@@ -32,6 +32,13 @@
                     <TextBlock x:Name="RepoText" Foreground="Gray" FontSize="11" FontFamily="Consolas" />
                     <TextBlock x:Name="DueText" Foreground="Gray" FontSize="11" />
                     <TextBlock x:Name="CommentCountText" Foreground="Gray" FontSize="11" />
+                    <HyperlinkButton x:Name="OpenProjectLink" Content="OpenProject &#x2197;" Padding="0" FontSize="11"
+                                     Visibility="Collapsed" Click="OnOpenExternalLink" />
+                </StackPanel>
+                <StackPanel x:Name="RepoConfirmPanel" Orientation="Horizontal" Spacing="6" Visibility="Collapsed">
+                    <TextBlock Text="Needs a repository:" FontSize="11" Foreground="Orange" VerticalAlignment="Center" />
+                    <ComboBox x:Name="RepoConfirmPicker" Width="160" FontSize="11" PlaceholderText="Pick one..."
+                              SelectionChanged="OnRepoConfirmed" />
                 </StackPanel>
                 <ComboBox x:Name="StatusPicker" DisplayMemberPath="Label" HorizontalAlignment="Stretch"
                           SelectionChanged="OnStatusChanged" />

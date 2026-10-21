@@ -9,4 +9,5 @@ public static class HubEvents
     public const string SessionStatusChanged = nameof(SessionStatusChanged);
     public const string WorkItemChanged = nameof(WorkItemChanged);
     public const string WorkItemCommentAdded = nameof(WorkItemCommentAdded);
+    public const string OpenProjectSyncCompleted = nameof(OpenProjectSyncCompleted);
 }

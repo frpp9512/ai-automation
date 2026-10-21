@@ -57,6 +57,11 @@ public sealed partial class HealthDetailsDialog : ContentDialog
             ? "Unknown"
             : $"{health.AiProvider} - {(health.AiProviderConfigured ? "configured" : "no API key set")}";
 
+        SetDot(OpenProjectDot, health?.OpenProjectConnected);
+        OpenProjectStatusText.Text = health is null
+            ? "Unknown"
+            : health.OpenProjectConnected ? "Last sync attempt succeeded" : "Not connected (or not configured yet)";
+
         PendingCountText.Text = health?.PendingMessageCount.ToString() ?? "-";
 
         var notConfigured = health is not null && (!health.SlackConnected || !health.AiProviderConfigured);
