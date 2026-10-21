@@ -56,10 +56,47 @@ public class WorkItem
     public string? ExternalId { get; set; }
     public string? ExternalUrl { get; set; }
 
+    /// <summary>UTC time of the most recent successful OpenProject pull for this item; null for
+    /// an item that was never synced (including every non-OpenProject WorkItem).</summary>
+    public DateTimeOffset? LastSyncedAtUtc { get; set; }
+
+    /// <summary>Error message from the most recent failed OpenProject sync attempt for this
+    /// specific item, if any - cleared on the next successful sync.</summary>
+    public string? SyncError { get; set; }
+
+    /// <summary>
+    /// False when RepositoryName was left unassigned because OpenProjectSyncHostedService's
+    /// AI-based project match came back below the configured confidence threshold - surfaced in
+    /// the Tasks board as "needs a repository" until the user picks one (or explicitly confirms
+    /// none applies). Always true for a WorkItem not sourced from OpenProject, and for one where
+    /// the match was confident enough to auto-assign.
+    /// </summary>
+    public bool RepositoryAssignmentConfirmed { get; set; } = true;
+
+    /// <summary>UTC time of the most recent (billed) AI repository-match attempt for this item,
+    /// while still unconfirmed - lets OpenProjectSyncHostedService apply a cooldown instead of
+    /// re-matching (and re-billing) on every single sync poll. Null until the first attempt.</summary>
+    public DateTimeOffset? LastRepositoryMatchAttemptAtUtc { get; set; }
+
     /// <summary>Set when this was created from a Slack-triaged decision, for traceability.</summary>
     public Guid? SourceDecisionId { get; set; }
 
     public DateTimeOffset CreatedAtUtc { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? CompletedAtUtc { get; set; }
+
+    /// <summary>
+    /// Creates a new WorkItem for a freshly-synced OpenProject work package, starting with
+    /// RepositoryAssignmentConfirmed = false so OpenProjectSyncHostedService's AI-based repository
+    /// match always gets a chance to run - a dedicated factory rather than a plain object
+    /// initializer, so a future second OpenProject-creation path can't forget to set that flag the
+    /// way the original implementation once did.
+    /// </summary>
+    public static WorkItem CreateFromOpenProject(string externalId, string title) => new()
+    {
+        Title = title,
+        ExternalSystem = "OpenProject",
+        ExternalId = externalId,
+        RepositoryAssignmentConfirmed = false
+    };
 }

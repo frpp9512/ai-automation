@@ -87,6 +87,11 @@ public sealed partial class DashboardPage : Page
         SetDot(AiDot, health.AiProviderConfigured);
         AiStatusText.Text = $"{health.AiProvider} - {(health.AiProviderConfigured ? "configured" : "no API key set")}";
 
+        SetDot(OpenProjectDot, health.OpenProjectConnected);
+        OpenProjectStatusText.Text = health.OpenProjectConnected
+            ? "Last sync attempt succeeded"
+            : "Not connected (or not configured yet)";
+
         NewHistoryCountText.Text = (await newHistoryTask).ToString("N0");
         ActiveTasksCountText.Text = (await activeTasksTask).ToString("N0");
 

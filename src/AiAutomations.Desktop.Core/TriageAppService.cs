@@ -721,6 +721,7 @@ public class TriageAppService(IServiceScopeFactory scopeFactory)
         using var scope = scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var slackGateway = scope.ServiceProvider.GetRequiredService<ISlackGateway>();
+        var openProjectGateway = scope.ServiceProvider.GetRequiredService<IOpenProjectGateway>();
         var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
         var activityTracker = scope.ServiceProvider.GetRequiredService<IPipelineActivityTracker>();
 
@@ -735,6 +736,103 @@ public class TriageAppService(IServiceScopeFactory scopeFactory)
             SlackConnected: slackGateway.IsConnected,
             AiProviderConfigured: !string.IsNullOrWhiteSpace(apiKey),
             AiProvider: provider,
-            PendingMessageCount: activityTracker.PendingCount);
+            PendingMessageCount: activityTracker.PendingCount,
+            OpenProjectConnected: openProjectGateway.IsConnected);
+    }
+
+    /// <summary>Triggers an OpenProject sync pass immediately - the Settings page's "Sync now"
+    /// button, sharing the exact same logic as the periodic background pull.</summary>
+    public async Task SyncOpenProjectNowAsync(CancellationToken ct = default)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var syncTrigger = scope.ServiceProvider.GetRequiredService<IOpenProjectSyncTrigger>();
+        await syncTrigger.RunNowAsync(ct);
+    }
+
+    /// <summary>Live connectivity probe for the Settings page's "Test connection" button - unlike
+    /// IOpenProjectGateway.IsConnected (which only reflects the last sync attempt), this always
+    /// makes a real API call against whatever's currently configured.</summary>
+    public async Task<bool> TestOpenProjectConnectionAsync(CancellationToken ct = default)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var gateway = scope.ServiceProvider.GetRequiredService<IOpenProjectGateway>();
+        return await gateway.TestConnectionAsync(ct);
+    }
+
+    public async Task<OpenProjectSyncRunDto?> GetLastOpenProjectSyncRunAsync(CancellationToken ct = default)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var run = await db.OpenProjectSyncRuns.OrderByDescending(r => r.StartedAtUtc).FirstOrDefaultAsync(ct);
+        return run?.ToDto();
+    }
+
+    /// <summary>
+    /// Posts a comment on the WorkItem's linked OpenProject work package - explicit, per-item,
+    /// never automatic (the periodic sync only ever pulls; this is the one supported push-back
+    /// path alongside <see cref="PushWorkItemPercentToOpenProjectAsync"/>). Also records it as a
+    /// local comment so it shows up in this app's own comment history.
+    /// </summary>
+    public async Task PushWorkItemCommentToOpenProjectAsync(Guid workItemId, string text, CancellationToken ct = default)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var gateway = scope.ServiceProvider.GetRequiredService<IOpenProjectGateway>();
+
+        var item = await db.WorkItems.FindAsync([workItemId], ct)
+            ?? throw new InvalidOperationException($"WorkItem {workItemId} not found");
+        if (item.ExternalSystem != "OpenProject" || !int.TryParse(item.ExternalId, out var workPackageId))
+        {
+            throw new InvalidOperationException("This task isn't linked to an OpenProject work package.");
+        }
+
+        await gateway.PostCommentAsync(workPackageId, text, ct);
+
+        db.WorkItemComments.Add(new WorkItemComment { WorkItemId = workItemId, Text = text });
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Pushes the WorkItem's current PercentComplete to its linked OpenProject work
+    /// package - explicit, per-item, never automatic. Does not change the local value itself;
+    /// call UpdateWorkItemAsync first if the on-screen value hasn't been saved yet.</summary>
+    public async Task PushWorkItemPercentToOpenProjectAsync(Guid workItemId, CancellationToken ct = default)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var gateway = scope.ServiceProvider.GetRequiredService<IOpenProjectGateway>();
+
+        var item = await db.WorkItems.FindAsync([workItemId], ct)
+            ?? throw new InvalidOperationException($"WorkItem {workItemId} not found");
+        if (item.ExternalSystem != "OpenProject" || !int.TryParse(item.ExternalId, out var workPackageId))
+        {
+            throw new InvalidOperationException("This task isn't linked to an OpenProject work package.");
+        }
+
+        await gateway.UpdatePercentageDoneAsync(workPackageId, item.PercentComplete, ct);
+    }
+
+    /// <summary>
+    /// Confirms (or changes) which registered repository an OpenProject-sourced WorkItem belongs
+    /// to - the Tasks board's inline "needs a repository" picker. repositoryName = null confirms
+    /// "none applies" explicitly, same as picking a real one: either way,
+    /// RepositoryAssignmentConfirmed flips to true so the next sync stops re-matching it.
+    /// </summary>
+    public async Task<WorkItemDto?> ConfirmWorkItemRepositoryAsync(Guid workItemId, string? repositoryName, CancellationToken ct = default)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var notifier = scope.ServiceProvider.GetRequiredService<IRealtimeNotifier>();
+
+        var item = await db.WorkItems.FindAsync([workItemId], ct);
+        if (item is null) return null;
+
+        item.RepositoryName = repositoryName;
+        item.RepositoryAssignmentConfirmed = true;
+        item.UpdatedAtUtc = DateTimeOffset.UtcNow;
+
+        await db.SaveChangesAsync(ct);
+        await notifier.WorkItemChangedAsync(item);
+        return item.ToDto();
     }
 }

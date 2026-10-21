@@ -9,6 +9,7 @@ public class FakeRealtimeNotifier : IRealtimeNotifier
     public List<ClaudeSession> SessionStatusChanges { get; } = [];
     public List<WorkItem> WorkItemChanges { get; } = [];
     public List<(WorkItem WorkItem, WorkItemComment Comment)> WorkItemCommentsAdded { get; } = [];
+    public List<OpenProjectSyncRun> OpenProjectSyncRuns { get; } = [];
 
     public Task MessageReceivedAsync(SlackMessage message) => Task.CompletedTask;
 
@@ -35,6 +36,12 @@ public class FakeRealtimeNotifier : IRealtimeNotifier
     public Task WorkItemCommentAddedAsync(WorkItem workItem, WorkItemComment comment)
     {
         WorkItemCommentsAdded.Add((workItem, comment));
+        return Task.CompletedTask;
+    }
+
+    public Task OpenProjectSyncCompletedAsync(OpenProjectSyncRun run)
+    {
+        OpenProjectSyncRuns.Add(run);
         return Task.CompletedTask;
     }
 }

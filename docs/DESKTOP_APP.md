@@ -26,18 +26,32 @@ instead of over HTTP. It's a singleton that resolves a scoped `AppDbContext`/ser
 
 - **Dashboard** (`DashboardPage`, the app's home page) - overview: a "N items need your review"
   banner linking to Inbox when anything's pending, stat tiles (Pending / Processing now / New in
-  24h / Active tasks / AI calls), a recent-activity feed, a live health card, tasks-by-status
+  24h / Active tasks / AI calls), a recent-activity feed, a live health card (Database/Slack/AI
+  provider/OpenProject dots, same `HealthStatusDto` the title-bar health strip uses), tasks-by-status
   breakdown, AI-usage-by-model breakdown. Refreshes on a timer plus realtime notifier events.
 - **Inbox** (`InboxPage`) - the pending-approval card list (`ActionCardControl` per item) plus a
   collapsed-by-default "Catch up on past messages" backfill control (`Expander`). Deliberately
   kept action-focused, not a dashboard - see CLAUDE.md's standing decisions.
 - **Tasks** (`TasksPage`) - a Kanban board over `WorkItem`s (Todo/In progress/In review/Done/
   Cancelled), drag-and-drop between columns (see "Kanban drag-and-drop" below), manual add form.
+  A card synced from OpenProject shows a "View in OpenProject" link and, if its project couldn't
+  be confidently matched to a registered repository, an inline "needs a repository" picker (see
+  "OpenProject sync" below).
 - **History** (`HistoryPage`) - every decision ever made, including ones with no derived action.
   Every row with a source Slack message gets a "View in Slack" button.
 - **Settings** (`SettingsPage`) - Connections (Slack/AI credentials, editable without hand-editing
-  `settings.json`, export/import), Theme (Light/Dark/Auto), Backup & restore (database), the
-  repository registry (add/edit/remove).
+  `settings.json`, export/import), OpenProject (base URL/token/sync interval/status filter/
+  auto-assign confidence threshold, plus Test connection and Sync now buttons), Theme
+  (Light/Dark/Auto), Backup & restore (database), the repository registry (add/edit/remove).
+
+## OpenProject sync
+
+See [ARCHITECTURE.md](../ARCHITECTURE.md)'s "OpenProject sync (Desktop only)" section for the full
+design. In short: `OpenProjectSyncHostedService` periodically pulls work packages assigned to the
+configured account into `WorkItem`s; pushing a comment or `% complete` back is a separate, explicit
+per-task action (buttons on `WorkItemDetailDialog`, visible only when the task is linked), never
+automatic. Repository assignment is AI-confidence-triaged, not blind string matching - an
+unconfident match surfaces as an inline picker on the Tasks board card instead of guessing.
 - **About** (`AboutPage`) - app icon/version, contact, local data path.
 
 ## Inbox approval flow
@@ -68,10 +82,12 @@ approval" rule as everything else that posts to Slack.
   from inside `AnthropicDecisionEngine`/`OpenAiCompatibleDecisionEngine` themselves. Surfaced via
   `TriageAppService.GetAiUsageSummaryAsync()` (last 24h, with a per-model breakdown).
 - `HealthStripControl` (title bar, visible from every page) polls `GetHealthAsync()` every 15s
-  plus on realtime events, shows DB/Slack/AI dots and a "Processing N" indicator, and fires a
-  Windows toast (`ToastNotificationService.ShowHealthChangedToast`) on any actual status flip
-  (not on every poll). Click it for `HealthDetailsDialog` (fuller status + AI usage with
-  per-model proportional bars).
+  plus on realtime events, shows DB/Slack/AI/OpenProject dots and a "Processing N" indicator, and
+  fires a Windows toast (`ToastNotificationService.ShowHealthChangedToast`) on any actual status
+  flip (not on every poll). The OpenProject dot reflects the result of the most recent sync
+  attempt (`IOpenProjectGateway.IsConnected`), not a live ping on every poll - same pattern as the
+  Slack dot. Click the strip for `HealthDetailsDialog` (fuller status + AI usage with per-model
+  proportional bars).
 
 ## Theming
 
@@ -95,15 +111,18 @@ auto-scrolls it (`TasksPage.OnBoardScrollViewerDragOver`).
 `TrayIconService` - left-click/double-click opens the window; right-click menu has direct links
 to every page plus a Health dialog shortcut. `ToastNotificationService` shows a toast when an
 action enters `PendingApproval`, when one `Failed`, on an automated (Slack-linked) work item
-comment, and on a health status change - clicking any of them deep-links back into the app
-(`MainWindow.ShowActionDetail`/`ShowWorkItemDetail`/`ShowHealthDetail`).
+comment, on a health status change, and once per OpenProject sync run that created or failed to
+sync an item (never one toast per item, and silent on an uneventful poll) - clicking any of them
+deep-links back into the app (`MainWindow.ShowActionDetail`/`ShowWorkItemDetail`/`ShowHealthDetail`).
 
 ## Settings storage
 
 `settings.json` lives under the packaged app's `LocalState` folder (`DesktopConfiguration`
 resolves this via `Windows.Storage.ApplicationData`, falling back to a plain `%LocalAppData%`
 folder when there's no package identity, e.g. an unpackaged dev/test run). Same section shape as
-the Server's `appsettings.json` (`Slack:*`/`Ai:*`/`Anthropic:*`/`OpenAiCompatible:*`/`Claude:*`).
+the Server's `appsettings.json` (`Slack:*`/`Ai:*`/`Anthropic:*`/`OpenAiCompatible:*`/`Claude:*`/
+`OpenProject:*`) - though `OpenProject:*` is Desktop-only in practice, since Server has no
+settings UI or configuration for it.
 `DesktopSettingsEditor` reads/writes the actual JSON values (distinct from
 `DesktopConfiguration.Load()`, which builds the read-only `IConfiguration` the host was composed
 from at launch) so the Settings page can edit them without the user opening the file - a change

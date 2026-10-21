@@ -13,6 +13,8 @@
             <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Right">
                 <HyperlinkButton x:Name="ViewInSlackLink" Content="View originating message in Slack"
                                  Click="OnViewInSlack" Visibility="Collapsed" />
+                <HyperlinkButton x:Name="OpenProjectLink" Content="View in OpenProject"
+                                 Click="OnViewInOpenProject" Visibility="Collapsed" />
                 <Button x:Name="ImplementationPromptButton" Click="OnGenerateImplementationPrompt">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <ProgressRing x:Name="ImplementationPromptSpinner" Width="14" Height="14" IsActive="False" Visibility="Collapsed" />
@@ -64,18 +66,27 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0" Text="Completion" FontSize="12" Foreground="Gray" />
-                    <TextBlock Grid.Column="1" x:Name="PercentLabel" FontSize="12" Foreground="Gray" />
+                    <TextBlock Grid.Column="1" x:Name="PercentLabel" FontSize="12" Foreground="Gray" Margin="0,0,8,0" />
+                    <Button Grid.Column="2" x:Name="PushPercentButton" Visibility="Collapsed" Click="OnPushPercent">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <ProgressRing x:Name="PushPercentSpinner" Width="14" Height="14" IsActive="False" Visibility="Collapsed" />
+                            <TextBlock x:Name="PushPercentButtonText" Text="Push % to OpenProject" />
+                        </StackPanel>
+                    </Button>
                 </Grid>
                 <Slider x:Name="PercentSlider" Minimum="0" Maximum="100" StepFrequency="5"
                         ValueChanged="OnPercentChanged" />
+                <InfoBar x:Name="PushPercentErrorBar" Severity="Error" IsOpen="False" IsClosable="True" Title="Couldn't push % to OpenProject" />
             </StackPanel>
 
             <StackPanel Spacing="4">
                 <TextBlock Text="COMMENTS" FontWeight="SemiBold" FontSize="11" Foreground="Gray" />
                 <StackPanel x:Name="CommentsPanel" Spacing="8" />
                 <InfoBar x:Name="RefineCommentErrorBar" Severity="Error" IsOpen="False" IsClosable="True" Title="Couldn't refine comment" />
+                <InfoBar x:Name="PushCommentErrorBar" Severity="Error" IsOpen="False" IsClosable="True" Title="Couldn't post to OpenProject" />
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <TextBox x:Name="NewCommentBox" PlaceholderText="Add a comment..." Width="320" />
                     <Button x:Name="RefineCommentButton" Click="OnRefineComment">
@@ -86,6 +97,7 @@
                     </Button>
                     <Button x:Name="AddCommentButton" Content="Add" Click="OnAddComment" />
                 </StackPanel>
+                <CheckBox x:Name="AlsoPostToOpenProjectBox" Content="Also post to OpenProject" Visibility="Collapsed" />
             </StackPanel>
         </StackPanel>
     </ScrollViewer>

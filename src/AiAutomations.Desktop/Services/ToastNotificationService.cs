@@ -40,6 +40,7 @@ public class ToastNotificationService : IDisposable
         AppNotificationManager.Default.NotificationInvoked += OnNotificationInvoked;
         _notifier.ActionStatusChanged += OnActionStatusChanged;
         _notifier.WorkItemCommentAdded += OnWorkItemCommentAdded;
+        _notifier.OpenProjectSyncCompleted += OnOpenProjectSyncCompleted;
     }
 
     private void OnActionStatusChanged(ActionItemDto action)
@@ -117,6 +118,52 @@ public class ToastNotificationService : IDisposable
         });
     }
 
+    /// <summary>
+    /// One summary toast per OpenProjectSyncHostedService run - not one per synced item, so a
+    /// sync that pulls in several work packages at once doesn't burst several toasts. Silent
+    /// when a run found nothing new/failed (the common case on a 15-minute poll with no change).
+    /// </summary>
+    private void OnOpenProjectSyncCompleted(OpenProjectSyncRunDto run)
+    {
+        if (run.ErrorMessage is not null)
+        {
+            _dispatcherQueue.TryEnqueue(() =>
+            {
+                var builder = new AppNotificationBuilder()
+                    .AddArgument("openHealth", "1")
+                    .AddText("OpenProject sync failed")
+                    .AddText(Truncate(run.ErrorMessage, 150));
+
+                AppNotificationManager.Default.Show(builder.BuildNotification());
+            });
+            return;
+        }
+
+        if (run.ItemsCreated == 0 && run.ItemsFailed == 0)
+        {
+            return;
+        }
+
+        _dispatcherQueue.TryEnqueue(() =>
+        {
+            var lines = new List<string>();
+            if (run.ItemsCreated > 0)
+            {
+                lines.Add($"{run.ItemsCreated} new work item{(run.ItemsCreated == 1 ? "" : "s")} synced from OpenProject");
+            }
+            if (run.ItemsFailed > 0)
+            {
+                lines.Add($"{run.ItemsFailed} item{(run.ItemsFailed == 1 ? "" : "s")} failed to sync");
+            }
+
+            var builder = new AppNotificationBuilder()
+                .AddText("OpenProject sync")
+                .AddText(string.Join(", ", lines));
+
+            AppNotificationManager.Default.Show(builder.BuildNotification());
+        });
+    }
+
     /// <summary>Health-status-change alert (Slack dropped, AI misconfigured, etc.) - distinct
     /// from the per-action toasts above, with no action/work item to deep-link to; clicking it
     /// opens the health details dialog instead.</summary>
@@ -159,6 +206,7 @@ public class ToastNotificationService : IDisposable
     {
         _notifier.ActionStatusChanged -= OnActionStatusChanged;
         _notifier.WorkItemCommentAdded -= OnWorkItemCommentAdded;
+        _notifier.OpenProjectSyncCompleted -= OnOpenProjectSyncCompleted;
         AppNotificationManager.Default.NotificationInvoked -= OnNotificationInvoked;
     }
 }

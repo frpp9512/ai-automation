@@ -28,6 +28,12 @@
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="8">
+            <Ellipse x:Name="OpenProjectDot" Width="10" Height="10" Fill="Gray" />
+            <TextBlock Text="OpenProject" Width="90" VerticalAlignment="Center" />
+            <TextBlock x:Name="OpenProjectStatusText" Foreground="Gray" VerticalAlignment="Center" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Spacing="8">
             <TextBlock Text="Processing now" Width="108" VerticalAlignment="Center" />
             <TextBlock x:Name="PendingCountText" Foreground="Gray" VerticalAlignment="Center" />
         </StackPanel>

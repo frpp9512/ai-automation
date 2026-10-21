@@ -19,12 +19,18 @@ public sealed partial class WorkItemCardControl : UserControl
 
     private static readonly List<StatusOption> StatusOptions = Columns.Select(s => new StatusOption(s, ColumnTitle(s))).ToList();
 
+    private const string NoRepoOption = "(none)";
+
     private WorkItemDto _item = null!;
     private bool _suppressStatusEvent;
 
     public event Func<WorkItemDto, WorkItemStatus, Task>? StatusChanged;
     public event Func<WorkItemDto, Task>? DeleteRequested;
     public event Action<WorkItemDto>? EditRequested;
+
+    /// <summary>Fired when the user picks a repository (or explicitly "(none)") from the inline
+    /// "needs a repository" picker - repositoryName is null for an explicit "none applies".</summary>
+    public event Func<WorkItemDto, string?, Task>? RepositoryConfirmed;
 
     public WorkItemCardControl()
     {
@@ -38,7 +44,7 @@ public sealed partial class WorkItemCardControl : UserControl
         _ => status.ToString()
     };
 
-    public void Populate(WorkItemDto item, int commentCount = 0)
+    public void Populate(WorkItemDto item, int commentCount = 0, IReadOnlyList<string>? repositoryOptions = null)
     {
         _item = item;
 
@@ -70,9 +76,25 @@ public sealed partial class WorkItemCardControl : UserControl
         CommentCountText.Text = commentCount > 0 ? $"{commentCount} comment{(commentCount == 1 ? "" : "s")}" : string.Empty;
         CommentCountText.Visibility = commentCount > 0 ? Visibility.Visible : Visibility.Collapsed;
 
-        MetaRow.Visibility = RepoText.Visibility == Visibility.Visible || DueText.Visibility == Visibility.Visible || CommentCountText.Visibility == Visibility.Visible
+        OpenProjectLink.Visibility = string.IsNullOrWhiteSpace(item.ExternalUrl) ? Visibility.Collapsed : Visibility.Visible;
+
+        MetaRow.Visibility = RepoText.Visibility == Visibility.Visible || DueText.Visibility == Visibility.Visible
+                              || CommentCountText.Visibility == Visibility.Visible || OpenProjectLink.Visibility == Visibility.Visible
             ? Visibility.Visible
             : Visibility.Collapsed;
+
+        if (!item.RepositoryAssignmentConfirmed)
+        {
+            var options = new List<string> { NoRepoOption };
+            options.AddRange(repositoryOptions ?? []);
+            RepoConfirmPicker.ItemsSource = options;
+            RepoConfirmPicker.SelectedIndex = -1;
+            RepoConfirmPanel.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            RepoConfirmPanel.Visibility = Visibility.Collapsed;
+        }
 
         _suppressStatusEvent = true;
         StatusPicker.ItemsSource = StatusOptions;
@@ -102,4 +124,34 @@ public sealed partial class WorkItemCardControl : UserControl
     }
 
     private void OnEdit(object sender, RoutedEventArgs e) => EditRequested?.Invoke(_item);
+
+    private async void OnRepoConfirmed(object sender, SelectionChangedEventArgs e)
+    {
+        if (RepositoryConfirmed is null || RepoConfirmPicker.SelectedItem is not string selected)
+        {
+            return;
+        }
+
+        try
+        {
+            await RepositoryConfirmed.Invoke(_item, selected == NoRepoOption ? null : selected);
+        }
+        catch (Exception ex)
+        {
+            // This lightweight card control has no inline error surface - revert the picker so it
+            // doesn't look like the pick was applied, rather than let the exception escape this
+            // async void handler and crash the whole app on a transient failure (e.g. a locked
+            // database).
+            System.Diagnostics.Debug.WriteLine($"Failed to confirm repository for WorkItem {_item.Id}: {ex}");
+            RepoConfirmPicker.SelectedIndex = -1;
+        }
+    }
+
+    private async void OnOpenExternalLink(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(_item.ExternalUrl) && Uri.TryCreate(_item.ExternalUrl, UriKind.Absolute, out var uri))
+        {
+            await Windows.System.Launcher.LaunchUriAsync(uri);
+        }
+    }
 }

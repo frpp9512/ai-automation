@@ -36,8 +36,13 @@ public sealed partial class SettingsPage : Page
         _initializingThemePicker = false;
 
         LoadConnectionsFields();
+        LoadOpenProjectFields();
 
-        Loaded += async (_, _) => await RefreshAsync();
+        Loaded += async (_, _) =>
+        {
+            await RefreshAsync();
+            await RefreshOpenProjectStatusAsync();
+        };
     }
 
     private void OnThemeChanged(object sender, SelectionChangedEventArgs e)
@@ -79,17 +84,22 @@ public sealed partial class SettingsPage : Page
     {
         var provider = (AiProviderBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "OpenAiCompatible";
 
-        DesktopSettingsEditor.Save(new DesktopSettingsValues(
-            SlackBotToken: SlackBotTokenBox.Password,
-            SlackAppLevelToken: SlackAppLevelTokenBox.Password,
-            SlackUserToken: SlackUserTokenBox.Password,
-            SlackSelfUserId: SlackSelfUserIdBox.Text,
-            AiProvider: provider,
-            AnthropicApiKey: AnthropicApiKeyBox.Password,
-            AnthropicModel: string.IsNullOrWhiteSpace(AnthropicModelBox.Text) ? "claude-sonnet-5-5" : AnthropicModelBox.Text,
-            OpenAiCompatibleApiKey: OpenAiApiKeyBox.Password,
-            OpenAiCompatibleBaseUrl: string.IsNullOrWhiteSpace(OpenAiBaseUrlBox.Text) ? "https://openrouter.ai/api/v1" : OpenAiBaseUrlBox.Text,
-            OpenAiCompatibleModel: string.IsNullOrWhiteSpace(OpenAiModelBox.Text) ? "openrouter/free" : OpenAiModelBox.Text));
+        // Loads the current values first (rather than constructing a brand-new record) so saving
+        // this card never clobbers the OpenProject fields the other card owns.
+        var current = DesktopSettingsEditor.Load();
+        DesktopSettingsEditor.Save(current with
+        {
+            SlackBotToken = SlackBotTokenBox.Password,
+            SlackAppLevelToken = SlackAppLevelTokenBox.Password,
+            SlackUserToken = SlackUserTokenBox.Password,
+            SlackSelfUserId = SlackSelfUserIdBox.Text,
+            AiProvider = provider,
+            AnthropicApiKey = AnthropicApiKeyBox.Password,
+            AnthropicModel = string.IsNullOrWhiteSpace(AnthropicModelBox.Text) ? "claude-sonnet-5-5" : AnthropicModelBox.Text,
+            OpenAiCompatibleApiKey = OpenAiApiKeyBox.Password,
+            OpenAiCompatibleBaseUrl = string.IsNullOrWhiteSpace(OpenAiBaseUrlBox.Text) ? "https://openrouter.ai/api/v1" : OpenAiBaseUrlBox.Text,
+            OpenAiCompatibleModel = string.IsNullOrWhiteSpace(OpenAiModelBox.Text) ? "openrouter/free" : OpenAiModelBox.Text
+        });
 
         ConnectionsSavedBar.Severity = InfoBarSeverity.Success;
         ConnectionsSavedBar.Title = "Saved";
@@ -99,6 +109,115 @@ public sealed partial class SettingsPage : Page
     }
 
     private void OnRestartApp(object sender, RoutedEventArgs e) => AppInstance.Restart(string.Empty);
+
+    private void LoadOpenProjectFields()
+    {
+        var values = DesktopSettingsEditor.Load();
+        OpenProjectBaseUrlBox.Text = values.OpenProjectBaseUrl ?? string.Empty;
+        OpenProjectApiTokenBox.Password = values.OpenProjectApiToken ?? string.Empty;
+        OpenProjectIntervalBox.Value = values.OpenProjectSyncIntervalMinutes;
+        OpenProjectThresholdBox.Value = values.OpenProjectRepositoryMatchConfidenceThreshold;
+
+        foreach (var item in OpenProjectStatusFilterBox.Items.OfType<ComboBoxItem>())
+        {
+            if (item.Tag as string == values.OpenProjectStatusFilter)
+            {
+                OpenProjectStatusFilterBox.SelectedItem = item;
+                break;
+            }
+        }
+    }
+
+    private void OnSaveOpenProject(object sender, RoutedEventArgs e)
+    {
+        var current = DesktopSettingsEditor.Load();
+        var statusFilter = (OpenProjectStatusFilterBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "all";
+
+        DesktopSettingsEditor.Save(current with
+        {
+            OpenProjectBaseUrl = OpenProjectBaseUrlBox.Text,
+            OpenProjectApiToken = OpenProjectApiTokenBox.Password,
+            OpenProjectSyncIntervalMinutes = (int)(double.IsNaN(OpenProjectIntervalBox.Value) ? 15 : OpenProjectIntervalBox.Value),
+            OpenProjectStatusFilter = statusFilter,
+            OpenProjectRepositoryMatchConfidenceThreshold = (int)(double.IsNaN(OpenProjectThresholdBox.Value) ? 80 : OpenProjectThresholdBox.Value)
+        });
+
+        OpenProjectSavedBar.Severity = InfoBarSeverity.Success;
+        OpenProjectSavedBar.Title = "Saved";
+        OpenProjectSavedBar.Message = "Restart the app for these changes to take effect.";
+        OpenProjectSavedBar.IsOpen = true;
+        RestartButton.Visibility = Visibility.Visible;
+    }
+
+    private async void OnTestOpenProjectConnection(object sender, RoutedEventArgs e)
+    {
+        TestOpenProjectConnectionButton.IsEnabled = false;
+        OpenProjectStatusBar.IsOpen = false;
+        try
+        {
+            // Tests the currently-running connection (built from settings at last launch), not
+            // whatever is unsaved in the fields above - save first if they were just edited.
+            var ok = await _triageAppService.TestOpenProjectConnectionAsync();
+            OpenProjectStatusBar.Severity = ok ? InfoBarSeverity.Success : InfoBarSeverity.Error;
+            OpenProjectStatusBar.Title = ok ? "Connected" : "Could not connect";
+            OpenProjectStatusBar.Message = ok
+                ? "OpenProject is reachable with the saved base URL/token."
+                : "Check the base URL/token above, save, and restart the app before testing again.";
+            OpenProjectStatusBar.IsOpen = true;
+        }
+        finally
+        {
+            TestOpenProjectConnectionButton.IsEnabled = true;
+        }
+    }
+
+    private async void OnSyncNow(object sender, RoutedEventArgs e)
+    {
+        SyncNowButton.IsEnabled = false;
+        OpenProjectStatusBar.IsOpen = false;
+        try
+        {
+            await _triageAppService.SyncOpenProjectNowAsync();
+            await RefreshOpenProjectStatusAsync();
+        }
+        catch (Exception ex)
+        {
+            // async void click handlers must never let an exception escape unhandled - this app
+            // has no global unhandled-exception handler, so that would crash the whole process.
+            OpenProjectStatusBar.Severity = InfoBarSeverity.Error;
+            OpenProjectStatusBar.Title = "Sync failed";
+            OpenProjectStatusBar.Message = ex.Message;
+            OpenProjectStatusBar.IsOpen = true;
+        }
+        finally
+        {
+            SyncNowButton.IsEnabled = true;
+        }
+    }
+
+    private async Task RefreshOpenProjectStatusAsync()
+    {
+        var run = await _triageAppService.GetLastOpenProjectSyncRunAsync();
+        if (run is null)
+        {
+            return;
+        }
+
+        var completed = run.CompletedAtUtc?.ToLocalTime().ToString("g") ?? "in progress";
+        if (run.ErrorMessage is not null)
+        {
+            OpenProjectStatusBar.Severity = InfoBarSeverity.Error;
+            OpenProjectStatusBar.Title = $"Last sync failed ({completed})";
+            OpenProjectStatusBar.Message = run.ErrorMessage;
+        }
+        else
+        {
+            OpenProjectStatusBar.Severity = InfoBarSeverity.Informational;
+            OpenProjectStatusBar.Title = $"Last sync {completed}";
+            OpenProjectStatusBar.Message = $"{run.ItemsCreated} new, {run.ItemsUpdated} updated, {run.ItemsFailed} failed.";
+        }
+        OpenProjectStatusBar.IsOpen = true;
+    }
 
     private async void OnExportSettings(object sender, RoutedEventArgs e)
     {

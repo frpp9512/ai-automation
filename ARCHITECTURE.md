@@ -53,12 +53,9 @@ conversation from Slack repeatedly.
   its own action, and is reused as context for classifying later messages in
   the same thread/channel - Slack's API is only called when the local log
   doesn't already have enough. See `MessageIngestPipeline.GetConversationContextAsync`.
-- **Self-hosted task tracking (`WorkItem`):** `TaskNeeded` messages (and manual
-  entries) become tasks on a local Tasks board (Jira/OpenProject-style fields:
-  status, priority, type, repo, labels, due date), not an external ticket -
-  there's no Jira/OpenProject integration today. `ExternalSystem`/`ExternalId`/
-  `ExternalUrl` are reserved, unused columns so a later sync integration is a
-  matter of filling those in and writing a sync job, not redesigning the model.
+- **Self-hosted task tracking (`WorkItem`):** `TaskNeeded` messages, manual entries, and (Desktop
+  only) a periodic OpenProject pull all land on the same local Tasks board (Jira/OpenProject-style
+  fields: status, priority, type, repo, labels, due date). See "OpenProject sync (Desktop only)".
 - **Architecture:** server-client, so other clients can be added later.
 - **Stack:** full .NET. Blazor Server is the first client since it shares
   the server's `Shared` contract types directly and fits an always-on,
@@ -280,11 +277,52 @@ labels, due date), populated two ways:
   traceability back to the originating message.
 - **Manually:** the Tasks page has its own "+ Add task" form for anything that didn't come
   through Slack at all.
+- **From OpenProject (Desktop only):** see "OpenProject sync" below - a third, periodic source,
+  using the same `ExternalSystem`/`ExternalId`/`ExternalUrl` columns the model always reserved.
 
-**Designed for an easy future sync, not an actual one today.** `ExternalSystem`, `ExternalId`,
-and `ExternalUrl` columns exist on `WorkItem` specifically so that wiring up Jira/OpenProject
-later is "add a sync job that fills these in," not "redesign the schema" - there's no sync logic
-or external API client yet, these columns are just reserved and currently always `null`.
+## OpenProject sync (Desktop only)
+
+`OpenProjectSyncHostedService` (`AiAutomations.Infrastructure/OpenProject/`) is a portable
+`IHostedService`, registered only where `AddInfrastructure` is called from a host that configures
+it - in practice just Desktop today, since Server has no OpenProject settings UI and the feature
+was scoped to Desktop. On a `PeriodicTimer` (interval from `OpenProjectOptions.SyncIntervalMinutes`,
+default 15) it pulls work packages assigned to the configured account (`IOpenProjectGateway`,
+a `HttpClient`-based REST v3 client mirroring `ISlackGateway`'s "one seam" shape) and upserts them
+into `WorkItem`, matched on `ExternalSystem == "OpenProject"` + `ExternalId`. The same method
+(`RunNowAsync`) backs both the timer and the Settings page's manual "Sync now" button - registered
+as both a singleton (for direct calls) and the `IHostedService` the generic host starts.
+
+**Pull is one-directional and fully overwrites OpenProject-owned fields** (title, description,
+status, due date, % complete) on every sync - there's no conflict detection, so a local edit or a
+Kanban drag on a synced card between polls can be reverted by the next pull. **Push-back is
+deliberately narrow and always explicit**: only a comment (`IOpenProjectGateway.PostCommentAsync`,
+posted as a journal entry - never conflicts with a concurrent edit) or `% complete`
+(`UpdatePercentageDoneAsync`, gated by the work package's current `lockVersion` fetched immediately
+before the write) can be pushed, and only via a button the user clicks on that specific task -
+consistent with this app's "nothing auto-sends" rule. The OpenProject account's own API token
+can't create new work packages at all, which is part of why push was scoped this narrowly rather
+than attempting a full two-way sync.
+
+**Repository assignment is AI-triaged, not blind string matching.** An exact
+(case-insensitive) match between the OpenProject project name and a registered
+`RepositoryProfile.Name` auto-assigns with no AI call. Otherwise, `RepositoryMatchPrompt` builds a
+prompt for `IAiDecisionEngine.GenerateTextAsync` (no new decision-engine method - this reuses the
+same free-form helper call `TriageAppService` already uses for description/comment refinement) and
+parses back a repo name + 0-100 confidence; a match at or above
+`OpenProjectOptions.RepositoryMatchConfidenceThreshold` (default 80) auto-assigns and sets
+`WorkItem.RepositoryAssignmentConfirmed = true`. Below that (or no repositories registered at all),
+the field is left as `RepositoryAssignmentConfirmed = false` - the Tasks board's
+`WorkItemCardControl` shows an inline "needs a repository" picker for it, and once the user picks
+one (or explicitly confirms "none applies" via `TriageAppService.ConfirmWorkItemRepositoryAsync`),
+later syncs never re-match that item again.
+
+Each run is logged to a new `OpenProjectSyncRuns` table (counts + error, surfaced on the Settings
+page and via `IRealtimeNotifier.OpenProjectSyncCompletedAsync`), and `IOpenProjectGateway.IsConnected`
+(true once any call has round-tripped since app start, false after a network-level failure) feeds
+a new `OpenProjectConnected` field on the dashboard's `HealthStatusDto` - same health-strip pattern
+as Slack's own `IsConnected`, not a live ping on every health poll. `ToastNotificationService`
+shows one summary toast per sync run (not one per item) when it created/failed items, silent on an
+uneventful poll.
 
 The Blazor dashboard's board has no drag-and-drop; moving a card between columns is a `<select>`
 per card (`PUT /api/workitems/{id}/status`), which keeps the UI simple and avoids JS-interop drag
@@ -401,9 +439,11 @@ paths (including Ticket now creating a real `WorkItem`) are covered by the 7 xUn
   progress while a large range is running.
 - **No EF migration for the `Repositories`/`WorkItems` tables yet** - created via `EnsureCreated()`
   same as everything else; see the EF migrations gap above, same caveat applies.
-- **No external work-tracker sync** — `WorkItem.ExternalSystem`/`ExternalId`/`ExternalUrl` are
-  reserved columns, always `null` today. Building an actual Jira/OpenProject sync (push on
-  create/update, or pull/reconcile) is unstarted.
+- **OpenProject sync is Desktop-only** — Server/Client.Web have no `OpenProjectOptions`
+  configuration or settings UI, so `WorkItem`s created there are never pulled from or pushed to
+  OpenProject even if a Desktop instance elsewhere has it configured against the same database.
+  See "OpenProject sync (Desktop only)" above. A second external tracker (e.g. Jira) would still
+  need its own gateway/hosted service from scratch - no generic sync abstraction was introduced.
 - **Group-mention detection is scope-granted but not yet exercised** — `usergroups:read` was
   added and the app reinstalled; the server confirms 1 group membership on startup, but an actual
   mention of that group hasn't come through yet to verify end to end (see "Verified working").

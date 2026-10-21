@@ -52,6 +52,41 @@
                 </StackPanel>
             </Border>
 
+            <Border Padding="16"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="OpenProject" FontSize="16" FontWeight="SemiBold" />
+                    <TextBlock Foreground="Gray" FontSize="12" TextWrapping="Wrap"
+                               Text="Pulls work packages assigned to you into the Tasks board on a timer. Posting a comment or % complete back to OpenProject is a separate, explicit action on the task itself - nothing here pushes automatically." />
+
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBox x:Name="OpenProjectBaseUrlBox" Header="Base URL" Width="280" PlaceholderText="https://your-instance.example.com/" />
+                        <PasswordBox x:Name="OpenProjectApiTokenBox" Header="API token" Width="280" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <NumberBox x:Name="OpenProjectIntervalBox" Header="Sync interval (minutes)" Width="180"
+                                   Minimum="1" Maximum="1440" SpinButtonPlacementMode="Compact" />
+                        <ComboBox x:Name="OpenProjectStatusFilterBox" Header="Status filter" Width="140">
+                            <ComboBoxItem Content="All" Tag="all" />
+                            <ComboBoxItem Content="Open" Tag="open" />
+                            <ComboBoxItem Content="Closed" Tag="closed" />
+                        </ComboBox>
+                        <NumberBox x:Name="OpenProjectThresholdBox" Header="Auto-assign confidence threshold (%)" Width="220"
+                                   Minimum="0" Maximum="100" SpinButtonPlacementMode="Compact" />
+                    </StackPanel>
+
+                    <InfoBar x:Name="OpenProjectSavedBar" Severity="Success" IsOpen="False" IsClosable="True" Title="Saved" />
+                    <InfoBar x:Name="OpenProjectStatusBar" IsOpen="False" IsClosable="False" />
+
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Button x:Name="SaveOpenProjectButton" Content="Save" Style="{StaticResource AccentButtonStyle}" Click="OnSaveOpenProject" />
+                        <Button x:Name="TestOpenProjectConnectionButton" Content="Test connection" Click="OnTestOpenProjectConnection" />
+                        <Button x:Name="SyncNowButton" Content="Sync now" Click="OnSyncNow" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
             <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                 <TextBlock Text="Theme" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
                 <ComboBox x:Name="ThemePicker" Width="140" SelectionChanged="OnThemeChanged">

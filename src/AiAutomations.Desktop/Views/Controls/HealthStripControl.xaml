@@ -18,6 +18,10 @@
                 <Ellipse x:Name="AiDot" Width="7" Height="7" Fill="Gray" />
                 <TextBlock x:Name="AiLabel" Text="AI" FontSize="11" Foreground="Gray" />
             </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="4">
+                <Ellipse x:Name="OpenProjectDot" Width="7" Height="7" Fill="Gray" />
+                <TextBlock Text="OpenProject" FontSize="11" Foreground="Gray" />
+            </StackPanel>
             <StackPanel x:Name="PendingPanel" Orientation="Horizontal" Spacing="4" Visibility="Collapsed">
                 <ProgressRing Width="10" Height="10" IsActive="True" />
                 <TextBlock x:Name="PendingText" FontSize="11" Foreground="Gray" />

@@ -61,6 +61,41 @@ public static class DatabaseSchemaUpgrader
                     )
                     """, cancellationToken);
             }
+
+            if (!await ColumnExistsAsync(connection, "WorkItems", "LastSyncedAtUtc", cancellationToken))
+            {
+                await ExecuteAsync(connection, "ALTER TABLE WorkItems ADD COLUMN LastSyncedAtUtc INTEGER NULL", cancellationToken);
+            }
+
+            if (!await ColumnExistsAsync(connection, "WorkItems", "SyncError", cancellationToken))
+            {
+                await ExecuteAsync(connection, "ALTER TABLE WorkItems ADD COLUMN SyncError TEXT NULL", cancellationToken);
+            }
+
+            if (!await ColumnExistsAsync(connection, "WorkItems", "RepositoryAssignmentConfirmed", cancellationToken))
+            {
+                await ExecuteAsync(connection, "ALTER TABLE WorkItems ADD COLUMN RepositoryAssignmentConfirmed INTEGER NOT NULL DEFAULT 1", cancellationToken);
+            }
+
+            if (!await ColumnExistsAsync(connection, "WorkItems", "LastRepositoryMatchAttemptAtUtc", cancellationToken))
+            {
+                await ExecuteAsync(connection, "ALTER TABLE WorkItems ADD COLUMN LastRepositoryMatchAttemptAtUtc INTEGER NULL", cancellationToken);
+            }
+
+            if (!await TableExistsAsync(connection, "OpenProjectSyncRuns", cancellationToken))
+            {
+                await ExecuteAsync(connection, """
+                    CREATE TABLE OpenProjectSyncRuns (
+                        Id TEXT NOT NULL PRIMARY KEY,
+                        StartedAtUtc INTEGER NOT NULL,
+                        CompletedAtUtc INTEGER NULL,
+                        ItemsCreated INTEGER NOT NULL,
+                        ItemsUpdated INTEGER NOT NULL,
+                        ItemsFailed INTEGER NOT NULL,
+                        ErrorMessage TEXT NULL
+                    )
+                    """, cancellationToken);
+            }
         }
         finally
         {

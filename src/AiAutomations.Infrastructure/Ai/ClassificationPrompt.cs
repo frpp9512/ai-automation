@@ -11,11 +11,6 @@ internal static class ClassificationPrompt
     private const int MaxMessageChars = 1500;
     private const int MaxContextLineChars = 250;
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
-
     public record Result(
         string Intent,
         string Urgency,
@@ -31,9 +26,7 @@ internal static class ClassificationPrompt
             ? "(none)"
             : string.Join('\n', threadContext.Select(m => $"- {DisplayLabel(m)}: {Truncate(m.Text, MaxContextLineChars)}"));
 
-        var repoBlock = knownRepositories.Count == 0
-            ? "(none registered)"
-            : string.Join('\n', knownRepositories.Select(r => $"- {r.Name}: {r.Keywords ?? "(no keywords)"}"));
+        var repoBlock = AiPromptHelpers.BuildRepositoryListBlock(knownRepositories);
 
         return $$"""
             Triage this Slack message for a software engineer. Respond with ONLY this JSON shape, no prose:
@@ -73,21 +66,14 @@ internal static class ClassificationPrompt
     {
         try
         {
-            var json = ExtractJson(rawResponseText);
-            return JsonSerializer.Deserialize<Result>(json, JsonOptions)
+            var json = AiPromptHelpers.ExtractJson(rawResponseText);
+            return JsonSerializer.Deserialize<Result>(json, AiPromptHelpers.CaseInsensitiveJsonOptions)
                    ?? throw new InvalidOperationException("Could not parse classification JSON (null result)");
         }
         catch (JsonException ex)
         {
             throw new InvalidOperationException($"Could not parse classification JSON. Raw response: {Truncate(rawResponseText, 500)}", ex);
         }
-    }
-
-    private static string ExtractJson(string text)
-    {
-        var start = text.IndexOf('{');
-        var end = text.LastIndexOf('}');
-        return start >= 0 && end > start ? text[start..(end + 1)] : text;
     }
 
     private static string Truncate(string text, int maxLength) => text.Length <= maxLength ? text : text[..maxLength] + "...";
