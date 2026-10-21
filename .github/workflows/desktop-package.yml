@@ -1,0 +1,131 @@
+name: Package Desktop app
+
+# Fires once a PR into main is actually merged (not just closed), plus workflow_dispatch so it
+# can be run manually to test it without needing a real PR merge.
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    # Skip entirely for a PR that was closed without merging - workflow_dispatch always runs.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    runs-on: windows-latest
+
+    env:
+      DESKTOP_CSPROJ: src/AiAutomations.Desktop/AiAutomations.Desktop.csproj
+      MANIFEST_PATH: src/AiAutomations.Desktop/Package.appxmanifest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      # Major.Minor stay fixed; Build is the strictly-increasing GitHub run number, Revision is
+      # always 0 (MSIX convention). Produces e.g. 1.0.42.0 - edit MAJOR/MINOR here for a real
+      # version bump, this workflow only ever advances Build.
+      - name: Compute package version
+        id: version
+        shell: pwsh
+        run: |
+          $major = 1
+          $minor = 0
+          $build = ${{ github.run_number }}
+          $version = "$major.$minor.$build.0"
+          Write-Output "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Output "Package version: $version"
+
+      - name: Set manifest version
+        shell: pwsh
+        run: |
+          $path = "${{ env.MANIFEST_PATH }}"
+          $content = Get-Content -Raw $path
+          $content = $content -replace 'Version="\d+\.\d+\.\d+\.\d+"', 'Version="${{ steps.version.outputs.version }}"'
+          Set-Content -Path $path -Value $content -NoNewline
+
+      - name: Run tests
+        run: dotnet test tests/AiAutomations.Tests/AiAutomations.Tests.csproj --configuration Release
+
+      - name: Restore
+        run: dotnet restore ${{ env.DESKTOP_CSPROJ }}
+
+      # Unsigned publish - this is the one CLI path proven to actually produce a complete,
+      # launchable package layout for this project (see docs/DESKTOP_DEPLOYMENT.md). Signing
+      # happens as its own step below so a signing failure doesn't also blow up the build.
+      - name: Publish (unsigned)
+        run: >
+          dotnet publish ${{ env.DESKTOP_CSPROJ }}
+          -p:Platform=x64
+          -p:RuntimeIdentifier=win-x64
+          -p:Configuration=Release
+          -p:GenerateAppxPackageOnBuild=true
+          -p:AppxPackageSigningEnabled=false
+          -p:UapAppxPackageBuildMode=SideloadOnly
+          -p:AppxBundle=Never
+
+      - name: Locate generated package
+        id: locate
+        shell: pwsh
+        run: |
+          $msix = Get-ChildItem -Path "src/AiAutomations.Desktop/AppPackages" -Filter "*.msix" -Recurse | Select-Object -First 1
+          if (-not $msix) { throw "No .msix found under AppPackages - publish step didn't produce one." }
+          $dir = $msix.DirectoryName
+          Write-Output "msix_path=$($msix.FullName)" >> $env:GITHUB_OUTPUT
+          Write-Output "package_dir=$dir" >> $env:GITHUB_OUTPUT
+
+      # A fresh self-signed cert every run - fine for sideloading (this is a personal-use app,
+      # never submitted to the Store), but means each release has a different signer, so
+      # installing a new version always needs the matching .cer trusted first (Add-AppDevPackage.ps1,
+      # included in the uploaded package, does this automatically).
+      - name: Sign package
+        shell: pwsh
+        run: |
+          $pfxPath = Join-Path $env:RUNNER_TEMP "AiAutomationsCiCert.pfx"
+          $cerPath = Join-Path "${{ steps.locate.outputs.package_dir }}" "AiAutomations.Desktop_${{ steps.version.outputs.version }}_x64.cer"
+          $password = [System.Guid]::NewGuid().ToString("N")
+
+          $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=AiAutomations" -KeyUsage DigitalSignature `
+            -FriendlyName "AiAutomations CI signing ${{ steps.version.outputs.version }}" -CertStoreLocation "Cert:\CurrentUser\My" `
+            -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+
+          $securePassword = ConvertTo-SecureString -String $password -Force -AsPlainText
+          Export-PfxCertificate -Cert $cert -FilePath $pfxPath -Password $securePassword | Out-Null
+          Export-Certificate -Cert $cert -FilePath $cerPath | Out-Null
+
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter "signtool.exe" |
+            Where-Object { $_.FullName -like "*x64*" } | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $signtool) { throw "signtool.exe not found on this runner image." }
+
+          & $signtool sign /fd SHA256 /a /f $pfxPath /p $password "${{ steps.locate.outputs.msix_path }}"
+          if ($LASTEXITCODE -ne 0) { throw "signtool failed with exit code $LASTEXITCODE" }
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AiAutomations.Desktop-${{ steps.version.outputs.version }}
+          path: ${{ steps.locate.outputs.package_dir }}
+          if-no-files-found: error
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-v${{ steps.version.outputs.version }}
+          name: Desktop v${{ steps.version.outputs.version }}
+          body: |
+            Automated package build from PR #${{ github.event.pull_request.number }} merged into main.
+
+            **Install:** download and extract this release's zip, then run `Add-AppDevPackage.ps1`
+            (PowerShell, as the same user who'll run the app) - it trusts this build's signing
+            certificate and installs the package. See docs/DESKTOP_DEPLOYMENT.md for background.
+          files: |
+            ${{ steps.locate.outputs.package_dir }}/*
+          generate_release_notes: false

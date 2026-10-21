@@ -104,6 +104,23 @@ page's icon `Image` all render blank with no error. This `.csproj` already has t
 item (alongside the tray icon's `app-icon.ico`, which was always explicit) - if a new PNG asset
 is added to `Package.appxmanifest`, make sure the wildcard still covers it.
 
+## CI packaging (GitHub Actions)
+
+`.github/workflows/desktop-package.yml` builds a signed, installable `.msix` whenever a PR is
+merged into `main` (also runnable manually via `workflow_dispatch` to test it without a real PR).
+It bumps the package version to `1.0.<github.run_number>.0` (edit the workflow's
+`Compute package version` step for a real Major.Minor bump), signs with a fresh self-signed
+certificate each run (fine for sideloading; means each release needs its own `.cer` trusted -
+`Add-AppDevPackage.ps1`, included in the release assets, does that automatically), and publishes
+everything as a GitHub Release tagged `desktop-v<version>`.
+
+This workflow only takes effect once it exists on `main` (GitHub evaluates a PR's workflows from
+the base branch) - the PR that first merges it is what activates it for subsequent PRs. It hasn't
+been exercised in actual CI yet; if the `dotnet publish -p:GenerateAppxPackageOnBuild=true` step
+behaves differently on a GitHub-hosted runner than it did locally, that's the first thing to
+check (`windows-latest` ships a full Windows SDK, which is what made the signing step possible
+locally too).
+
 ## First-run / lost-settings recovery
 
 If `LocalState` ever gets wiped (accidental uninstall, or the VS-deploy uninstall issue above),
